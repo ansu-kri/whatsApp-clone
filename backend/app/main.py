@@ -6,8 +6,7 @@ from app.routes.user import router as userRouter
 from app.websocket.socket import manager
 from app.routes.message import ( router as messageRouter )
 import json
-from datetime import datetime
-import pytz
+from datetime import datetime, timezone
 
 app = FastAPI()
 
@@ -271,8 +270,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ================= SEND MESSAGE =================
-            india = pytz("Asia/Kolkata")
-            now = datetime.now(india)
+            now = datetime.now(timezone.utc)
 
             receiver_online = parsed["receiverId"] in manager.active_connections
 
