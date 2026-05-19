@@ -1,5 +1,4 @@
-import { useNavigate } from "react-router-dom";
-import { useLogoutMutation } from "../app/auth/authApi";
+
 import type { ChatUser } from "./types";
 
 type Props = {
@@ -13,17 +12,6 @@ export default function Sidebar({
   selectedUser,
   onSelectUser,
 }: Props) {
-  const [logout , { isLoading}] = useLogoutMutation();
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    try {
-      await logout().unwrap();
-      navigate("/", { replace: true });
-    } catch (error) {
-      console.log(error);
-    }
-  }
 
   return (
     <div className="w-[340px] bg-white border-r flex flex-col">
@@ -70,13 +58,13 @@ export default function Sidebar({
           </div>
         ))}
       </div>
-      <button
+      {/* <button
       onClick={handleLogout}
       disabled = {isLoading}
       className="cursor-pointer"
       >
       {isLoading ? "Logging out...": "Logout"}
-        </button>
+        </button> */}
     </div>
   );
 }

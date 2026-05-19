@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import type { ChatUser, ChatMessage } from "./types";
-
 import ChatHeader from "./ChatHeader";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
-
 import { getSocket, sendSocketMessage } from "../socket/socket";
 import { useGetMeQuery } from "../app/userApi";
 import { useGetMessageQuery } from "../app/messageApi";
@@ -31,10 +29,12 @@ export default function ChatWindow({ user }: Props) {
     meRef.current = me;
   }, [me]);
 
+  useEffect(() => {
+    setMessage("");
+  }, [user.id]);
+
   const { data: oldMessages } = useGetMessageQuery(
-    me && user
-      ? { senderId: me.id, receiverId: user.id }
-      : skipToken
+    me && user ? { senderId: me.id, receiverId: user.id } : skipToken,
   );
 
   // ================= SOCKET INIT =================
@@ -85,15 +85,13 @@ export default function ChatWindow({ user }: Props) {
       // USER ONLINE
       if (data.type === "user_online") {
         setOnlineUsers((prev) =>
-          prev.includes(data.userId) ? prev : [...prev, data.userId]
+          prev.includes(data.userId) ? prev : [...prev, data.userId],
         );
       }
 
       // USER OFFLINE
       if (data.type === "user_offline") {
-        setOnlineUsers((prev) =>
-          prev.filter((id) => id !== data.userId)
-        );
+        setOnlineUsers((prev) => prev.filter((id) => id !== data.userId));
       }
 
       // NEW MESSAGE
@@ -108,7 +106,7 @@ export default function ChatWindow({ user }: Props) {
             (msg) =>
               msg.senderId === newMessage.senderId &&
               msg.receiverId === newMessage.receiverId &&
-              msg.createdAt === newMessage.createdAt
+              msg.createdAt === newMessage.createdAt,
           );
 
           if (index !== -1) {
@@ -139,7 +137,7 @@ export default function ChatWindow({ user }: Props) {
               (m) =>
                 m.senderId === msg.senderId &&
                 m.receiverId === msg.receiverId &&
-                m.createdAt === msg.createdAt
+                m.createdAt === msg.createdAt,
             );
 
             if (index !== -1) {
@@ -172,10 +170,7 @@ export default function ChatWindow({ user }: Props) {
 
         setMessages((prev) =>
           prev.map((msg) => {
-            if (
-              msg.senderId === meId &&
-              msg.receiverId === user.id
-            ) {
+            if (msg.senderId === meId && msg.receiverId === user.id) {
               return {
                 ...msg,
                 status: "seen",
@@ -183,7 +178,7 @@ export default function ChatWindow({ user }: Props) {
               };
             }
             return msg;
-          })
+          }),
         );
       }
     };
@@ -216,38 +211,103 @@ export default function ChatWindow({ user }: Props) {
   };
 
   return (
-    <div className="flex-1 flex flex-col">
-      <ChatHeader
-        user={user}
-        isOnline={onlineUsers.includes(user.id)}
-      />
+    <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#f8fafc] via-[#eef2ff] to-[#e0f2fe]">
+      {/* HEADER */}
+      <div className="backdrop-blur-xl bg-white/70 border-b border-white/20 shadow-sm">
+        <ChatHeader user={user} isOnline={onlineUsers.includes(user.id)} />
+      </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-3 bg-[#f5f7fb]">
-        {messages.map((chat, i) => (
-          <MessageBubble
-            key={i}
-            message={chat}
-            currentUserId={me?.id || ""}
-          />
-        ))}
+      {/* CHAT AREA */}
+      <div
+        className="
+        flex-1
+        overflow-y-auto
+        px-6
+        md:px-10
+        py-6
+        space-y-4
+        scrollbar-thin
+        scrollbar-thumb-gray-300
+      "
+      >
+        {/* Welcome Section */}
+        <div className="text-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-700">
+            Conversation with {user.name}
+          </h2>
 
-        {typingUser === user.id && (
-          <p className="text-sm text-gray-500 px-2">
-            typing...
+          <p className="text-sm text-gray-500 mt-1">
+            Real-time messaging experience ⚡
           </p>
+        </div>
+
+        {/* Messages */}
+        <div className="space-y-3">
+          {messages.map((chat, i) => (
+            <div
+              key={i}
+              className="
+              animate-fadeIn
+              transition-all
+              duration-300
+            "
+            >
+              <MessageBubble message={chat} currentUserId={me?.id || ""} />
+            </div>
+          ))}
+        </div>
+
+        {/* Typing */}
+        {typingUser === user.id && (
+          <div className="flex items-center gap-2 px-3 py-2 w-fit bg-white rounded-full shadow-md">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></span>
+              <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-150"></span>
+              <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-300"></span>
+            </div>
+
+            <p className="text-sm text-gray-500">typing...</p>
+          </div>
         )}
 
         <div ref={bottomRef} />
       </div>
 
-      <MessageInput
-        message={message}
-        setMessage={setMessage}
-        onSend={sendMessage}
-        socket={socket}
-        meId={me?.id}
-        receiverId={user.id}
-      />
+      {/* INPUT AREA */}
+      <div
+        className="
+        sticky
+        bottom-0
+        px-4
+        md:px-8
+        py-4
+        backdrop-blur-xl
+        bg-white/70
+        border-t
+        border-white/20
+      "
+      >
+        <div
+          className="
+          max-w-5xl
+          mx-auto
+          rounded-2xl
+          shadow-lg
+          bg-white
+          px-3
+          py-2
+        "
+        >
+          <MessageInput
+            message={message}
+            setMessage={setMessage}
+            onSend={sendMessage}
+            socket={socket}
+            meId={me?.id}
+            receiverId={user.id}
+          />
+        </div>
+      </div>
     </div>
   );
 }
