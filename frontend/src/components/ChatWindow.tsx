@@ -219,16 +219,7 @@ export default function ChatWindow({ user }: Props) {
 
       {/* CHAT AREA */}
       <div
-        className="
-        flex-1
-        overflow-y-auto
-        px-6
-        md:px-10
-        py-6
-        space-y-4
-        scrollbar-thin
-        scrollbar-thumb-gray-300
-      "
+        className=" flex-1 overflow-y-auto px-6 md:px-10 py-6 space-y-4 scrollbar-thin scrollbar-thumb-gray-300"
       >
         {/* Welcome Section */}
         <div className="text-center mb-6">
@@ -275,28 +266,10 @@ export default function ChatWindow({ user }: Props) {
 
       {/* INPUT AREA */}
       <div
-        className="
-        sticky
-        bottom-0
-        px-4
-        md:px-8
-        py-4
-        backdrop-blur-xl
-        bg-white/70
-        border-t
-        border-white/20
-      "
+        className=" sticky bottom-0 px-4 md:px-8 py-4 backdrop-blur-xl bg-white/70 border-t border-white/20 "
       >
         <div
-          className="
-          max-w-5xl
-          mx-auto
-          rounded-2xl
-          shadow-lg
-          bg-white
-          px-3
-          py-2
-        "
+          className=" max-w-5xl mx-auto rounded-2xl shadow-lg bg-white px-3 py-2"
         >
           <MessageInput
             message={message}

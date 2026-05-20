@@ -14,21 +14,21 @@ export default function Chat() {
     recentMessage: "",
     lastChatTime: "",
     chats: [],
-  }))
+  }));
   const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
 
   useEffect(() => {
-    if(users.length > 0 && !selectedUser) {
+    if (users.length > 0 && !selectedUser) {
       setSelectedUser(users[0]);
     }
-  },[users]);
+  }, [users]);
 
-  if(isLoading){
-    return <div> Loading users...</div>
+  if (isLoading) {
+    return <div> Loading users...</div>;
   }
 
-  if(!selectedUser) {
-    return <div>No users found</div>
+  if (!selectedUser) {
+    return <div>No users found</div>;
   }
 
   return (
@@ -41,8 +41,15 @@ export default function Chat() {
 
       <ChatWindow
         user={selectedUser}
-        // setUsers={() => {}}
-        // setSelectedUser={setSelectedUser}
+        // messages={messages}
+        // me={me}
+        // message={message}
+        // setMessage={setMessage}
+        // sendMessage={sendMessage}
+        // typingUser={typingUser}
+        // onlineUsers={onlineUsers}
+        // socket={socket}
+        // bottomRef={bottomRef}
       />
     </div>
   );
