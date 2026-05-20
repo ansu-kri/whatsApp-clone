@@ -53,39 +53,14 @@ export default function MessageInput({
             onSend();
           }
         }}
-        className="
-      flex-1
-      bg-gray-100
-      rounded-full
-      px-5
-      py-3
-      outline-none
-      border
-      border-transparent
-      focus:border-blue-400
-      focus:bg-white
-      transition-all
-      duration-200
-    "
+        className=" flex-1 bg-gray-100 rounded-full px-5 py-3 outline-none border border-transparent focus:border-blue-400 focus:bg-white transition-all duration-200 "
         placeholder="Type a message..."
       />
 
       <button
         onClick={onSend}
-        className="
-      bg-gradient-to-r
-      from-blue-500
-      to-indigo-500
-      hover:scale-105
-      active:scale-95
-      transition-all
-      text-white
-      px-5
-      py-3
-      rounded-full
-      shadow-lg
-      font-medium
-    "
+        className=" bg-gradient-to-r from-blue-500 to-indigo-500 hover:scale-105 active:scale-95
+      transition-all text-white px-5 py-3 rounded-full shadow-lg font-medium"
       >
         Send
       </button>

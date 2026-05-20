@@ -95,7 +95,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 # ================= MESSAGE =================
                 if event_type == "message":
 
-                    now = datetime.utcnow()
+                    # now = datetime.utcnow()
+                    now = datetime.now(timezone.utc)
 
                     receiver_online = manager.is_online(parsed_data["receiverId"])
 

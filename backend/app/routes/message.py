@@ -1,8 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.database import db
 from datetime import timezone
+from app.middleware.authMiddleware import verify_token
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(verify_token)]
+)
 
 @router.get("/{senderId}/{receiverId}")
 async def get_messages(senderId: str, receiverId: str):
