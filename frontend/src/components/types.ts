@@ -13,4 +13,5 @@ export type ChatUser = {
   recentMessage: string;
   lastChatTime: string;
   chats: ChatMessage[];
+  isOnline: boolean;
 };
