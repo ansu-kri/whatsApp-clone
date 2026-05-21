@@ -12,6 +12,8 @@
   "dependencies": {
     "@chakra-ui/icons": "^2.1.1",
     "@chakra-ui/react": "^2.8.2",
+    "@emoji-mart/data": "^1.2.1",
+    "@emoji-mart/react": "^1.1.1",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
     "@hookform/resolvers": "^5.2.2",
@@ -19,6 +21,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "@vitejs/plugin-react": "^5.1.0",
     "axios": "^1.16.0",
+    "emoji-mart": "^5.6.0",
     "framer-motion": "^12.38.0",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.553.0",

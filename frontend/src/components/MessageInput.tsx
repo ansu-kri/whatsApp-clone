@@ -1,4 +1,5 @@
-import { useRef } from "react";
+
+import { useRef, useState } from "react";
 
 type Props = {
   message: string;
@@ -17,14 +18,16 @@ export default function MessageInput({
   meId,
   receiverId,
 }: Props) {
-  // =========================TYPING COOLDOWN
-  const typingCooldownRef = useRef<boolean>(false);
+  const typingCooldownRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // ======================== HANDLE TYPING
+  const [showEmoji, setShowEmoji] = useState(false);
+
   const handleTyping = () => {
     if (!socket || !meId || !receiverId) return;
     if (socket.readyState !== WebSocket.OPEN) return;
     if (typingCooldownRef.current) return;
+
     typingCooldownRef.current = true;
 
     socket.send(
@@ -32,7 +35,7 @@ export default function MessageInput({
         type: "typing",
         senderId: meId,
         receiverId,
-      }),
+      })
     );
 
     setTimeout(() => {
@@ -40,30 +43,100 @@ export default function MessageInput({
     }, 1500);
   };
 
-  return (
-    <div className="flex items-center gap-3">
-      <input
-        value={message}
-        onChange={(e) => {
-          setMessage(e.target.value);
-          handleTyping();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            onSend();
-          }
-        }}
-        className=" flex-1 bg-gray-100 rounded-full px-5 py-3 outline-none border border-transparent focus:border-blue-400 focus:bg-white transition-all duration-200 "
-        placeholder="Type a message..."
-      />
+  const handleFilePick = () => {
+    fileInputRef.current?.click();
+  };
 
-      <button
-        onClick={onSend}
-        className=" bg-gradient-to-r from-blue-500 to-indigo-500 hover:scale-105 active:scale-95
-      transition-all text-white px-5 py-3 rounded-full shadow-lg font-medium"
-      >
-        Send
-      </button>
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // TODO: upload logic here
+    console.log("Selected file:", file);
+  };
+
+  const addEmoji = (emoji: string) => {
+    setMessage(message + emoji);
+  };
+
+  return (
+    <div className="w-full px-2 sm:px-4">
+      <div className="flex items-end gap-2 sm:gap-3 bg-white/80 backdrop-blur-xl border border-gray-200 shadow-lg rounded-2xl p-2 sm:p-3">
+        
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        {/* ACTION BUTTONS */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Emoji */}
+          <button
+            onClick={() => setShowEmoji(!showEmoji)}
+            className="p-2 rounded-xl hover:bg-gray-100 active:scale-95 transition"
+            title="Emoji"
+          >
+            😊
+          </button>
+
+          {/* File */}
+          <button
+            onClick={handleFilePick}
+            className="p-2 rounded-xl hover:bg-gray-100 active:scale-95 transition"
+            title="Attach file"
+          >
+            📎
+          </button>
+
+          {/* Voice */}
+          <button
+            className="p-2 rounded-xl hover:bg-gray-100 active:scale-95 transition"
+            title="Voice message"
+          >
+            🎙
+          </button>
+        </div>
+
+        {/* INPUT */}
+        <input
+          value={message}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            handleTyping();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSend();
+          }}
+          className="flex-1 bg-transparent outline-none text-gray-700 placeholder:text-gray-400 px-2 py-2"
+          placeholder="Type a message..."
+        />
+
+        {/* SEND */}
+        <button
+          onClick={onSend}
+          className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 active:scale-95 transition text-white px-4 sm:px-6 py-2 rounded-xl shadow-md font-medium"
+        >
+          Send
+        </button>
+      </div>
+
+      {/* SIMPLE EMOJI PANEL (placeholder) */}
+      {showEmoji && (
+        <div className="mt-2 flex gap-2 flex-wrap bg-white border rounded-xl p-2 shadow">
+          {["😀", "😂", "😍", "😎", "😭", "👍", "🔥", "🎉"].map((e) => (
+            <button
+              key={e}
+              onClick={() => addEmoji(e)}
+              className="text-xl hover:scale-110 transition"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

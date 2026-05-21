@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type { ChatUser } from "./types";
 import { Search } from "lucide-react";
 
@@ -8,9 +9,28 @@ type Props = {
 };
 
 export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
-  
+  const [search, setSearch] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) =>
+      user.name.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [users, search]);
+
   return (
-    <aside className="w-[340px] h-screen bg-[#120d1b] border-r border-white/10 flex flex-col">
+    <aside
+      className="
+        w-full sm:w-[340px]
+        h-screen
+        sm:relative
+        fixed sm:static
+        inset-y-0 left-0
+        bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814]
+        border-r border-white/10
+        flex flex-col
+        z-40
+      "
+    >
       {/* HEADER */}
       <div className="p-5 border-b border-white/10">
         <h1 className="text-2xl font-bold text-white mb-4">Chatty</h1>
@@ -24,22 +44,24 @@ export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
 
           <input
             type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search users..."
-            className=" w-full bg-[#1d1729] text-white placeholder:text-gray-500 pl-10 pr-4 py-3 rounded-xl outline-none border border-transparent focus:border-purple-500 transition-all"
+            className="w-full bg-[#1d1729] text-white placeholder:text-gray-500 pl-10 pr-4 py-3 rounded-xl outline-none border border-transparent focus:border-purple-500 transition-all"
           />
         </div>
       </div>
 
       {/* USERS */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#3b2d56]">
-        {users.map((user) => {
+        {filteredUsers.map((user) => {
           const isActive = selectedUser?.id === user.id;
 
           return (
             <button
               key={user.id}
               onClick={() => onSelectUser(user)}
-              className={` w-full flex items-center gap-4 px-5 py-4 transition-all duration-200 border-l-4
+              className={`w-full flex items-center gap-4 px-5 py-4 transition-all duration-200 border-l-4
                 ${
                   isActive
                     ? "bg-[#1f1830] border-purple-500"

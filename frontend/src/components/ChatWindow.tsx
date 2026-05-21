@@ -10,9 +10,10 @@ import { skipToken } from "@reduxjs/toolkit/query";
 
 type Props = {
   user: ChatUser;
+  onBack?: () => void;
 };
 
-export default function ChatWindow({ user }: Props) {
+export default function ChatWindow({ user, onBack }: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
@@ -210,71 +211,63 @@ export default function ChatWindow({ user }: Props) {
     setMessage("");
   };
 
-  return (
-    <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#f8fafc] via-[#eef2ff] to-[#e0f2fe]">
-      {/* HEADER */}
-      <div className="backdrop-blur-xl bg-white/70 border-b border-white/20 shadow-sm">
-        <ChatHeader user={user} isOnline={onlineUsers.includes(user.id)} />
+return (
+  <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] ">
+
+    {/* HEADER */}
+    <div className="shadow-sm">
+      <ChatHeader user={user} isOnline={onlineUsers.includes(user.id)} onBack={onBack} />
+    </div>
+
+    {/* CHAT AREA */}
+    <div className="flex-1 overflow-y-auto px-6 md:px-10 py-6 space-y-4">
+
+      {/* WELCOME */}
+      <div className="text-center mb-6">
+        <h2 className="text-lg font-semibold text-gray-500">
+          Chat with {user.name}
+        </h2>
+        <p className="text-sm text-gray-400">
+          Secure real-time messaging ⚡
+        </p>
       </div>
 
-      {/* CHAT AREA */}
-      <div className=" flex-1 overflow-y-auto px-6 md:px-10 py-6 space-y-4 scrollbar-thin scrollbar-thumb-gray-300">
-        {/* Welcome Section */}
-        <div className="text-center mb-6">
-          <h2 className="text-xl font-semibold text-gray-700">
-            Conversation with {user.name}
-          </h2>
-
-          <p className="text-sm text-gray-500 mt-1">
-            Real-time messaging experience ⚡
-          </p>
-        </div>
-
-        {/* Messages */}
-        <div className="space-y-3">
-          {messages.map((chat, i) => (
-            <div
-              key={i}
-              className="
-              animate-fadeIn
-              transition-all
-              duration-300
-            "
-            >
-              <MessageBubble message={chat} currentUserId={me?.id || ""} />
-            </div>
-          ))}
-        </div>
-
-        {/* Typing */}
-        {typingUser === user.id && (
-          <div className="flex items-center gap-2 px-3 py-2 w-fit bg-white rounded-full shadow-md">
-            <div className="flex gap-1">
-              <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-150"></span>
-              <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-300"></span>
-            </div>
-
-            <p className="text-sm text-gray-500">typing...</p>
+      {/* MESSAGES */}
+      <div className="space-y-3">
+        {messages.map((chat, i) => (
+          <div key={i} className="animate-fadeIn">
+            <MessageBubble message={chat} currentUserId={me?.id || ""} />
           </div>
-        )}
-
-        <div ref={bottomRef} />
+        ))}
       </div>
 
-      {/* INPUT AREA */}
-      <div className=" sticky bottom-0 px-4 md:px-8 py-4 backdrop-blur-xl bg-white/70 border-t border-white/20 ">
-        <div className=" max-w-5xl mx-auto rounded-2xl shadow-lg bg-white px-3 py-2">
-          <MessageInput
-            message={message}
-            setMessage={setMessage}
-            onSend={sendMessage}
-            socket={socket}
-            meId={me?.id}
-            receiverId={user.id}
-          />
+      {/* TYPING */}
+      {typingUser === user.id && (
+        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow w-fit">
+          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
+          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></span>
+          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-300"></span>
+          <p className="text-sm text-gray-500">typing...</p>
         </div>
+      )}
+
+      <div ref={bottomRef} />
+    </div>
+
+    {/* INPUT */}
+    <div className="sticky bottom-0 px-4 md:px-8 py-4 bg-white/800 backdrop-blur-xl">
+      <div className="max-w-5xl mx-auto bg-white/800 rounded-2xl shadow-md px-3 py-2">
+        <MessageInput
+          message={message}
+          setMessage={setMessage}
+          onSend={sendMessage}
+          socket={socket}
+          meId={me?.id}
+          receiverId={user.id}
+        />
       </div>
     </div>
-  );
+
+  </div>
+);
 }
