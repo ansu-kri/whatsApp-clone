@@ -44,6 +44,11 @@ export const getSocket = (userId: string) => {
       }
     }, 1500);
   };
+//   socket.onclose = () => {
+//   console.log("❌ Socket disconnected");
+//   socket = null;
+//   isConnecting = false;
+// };
 
   socket.onerror = (err) => {
     console.log("❌ Socket error:", err);

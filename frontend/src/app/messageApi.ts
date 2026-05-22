@@ -7,6 +7,8 @@ export interface Message {
     receiverId: string;
     message: string;
     createdAt: string;
+    edited?: boolean;
+    deleted?: boolean;
 }
 
 export interface User {
@@ -27,7 +29,30 @@ export const messageApis = apiSlice.injectEndpoints({
                 method: "GET",
             }),
         }),
+
+        //Edit Message
+        editMessage: builder.mutation<
+            any,
+            { id: string; message: string }
+        >({
+            query: ({ id, message }) => ({
+                url: `/api/messages/edit/${id}`,
+                method: "PUT",
+                body: { message },
+            }),
+        }),
+
+        //Delete Message
+        deleteMessage: builder.mutation<
+            any,
+            string
+        >({
+            query: (id) => ({
+                url: `/api/messages/delete/${id}`,
+                method: "DELETE",
+            }),
+        }),
     }),
 });
 
-export const { useGetMessageQuery } = messageApis;
+export const { useGetMessageQuery, useEditMessageMutation, useDeleteMessageMutation } = messageApis;

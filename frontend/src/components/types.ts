@@ -1,9 +1,13 @@
 export type ChatMessage = {
+  id: string;
   senderId: string;
   receiverId: string;
   message: string;
   createdAt: string;
   status: "sent" | "delivered" | "seen";
+  seen?: boolean;
+  edited?: boolean;
+  deleted?: boolean;
 };
 
 export type ChatUser = {

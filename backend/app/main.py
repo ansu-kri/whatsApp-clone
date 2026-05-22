@@ -7,6 +7,7 @@ from app.websocket.socket import manager
 from app.routes.message import ( router as messageRouter )
 import json
 from datetime import datetime, timezone
+from bson import ObjectId
 
 app = FastAPI()
 
@@ -68,7 +69,8 @@ async def websocket_endpoint(websocket: WebSocket):
         missed = []
 
         async for m in cursor:
-            m["_id"] = str(m["_id"])
+            m["id"] = str(m["_id"])
+            del m["_id"]
 
             if "createdAt" in m:
                 m["createdAt"] = m["createdAt"].isoformat()
@@ -125,30 +127,126 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
 
                 continue
+             # ================= EDIT MESSAGE =================
+            if event == "edit_message":
+
+                message_id = parsed["messageId"]
+
+                msg = await db.messages.find_one({
+                    "_id": ObjectId(message_id)
+                })
+
+                if not msg:
+                    continue
+
+                # SECURITY CHECK
+                if msg["senderId"] != user_id:
+                    continue
+
+                await db.messages.update_one(
+                    {"_id": ObjectId(message_id)},
+                    {
+                        "$set": {
+                            "message": parsed["message"],
+                            "edited": True
+                        }
+                    }
+                )
+
+                payload = json.dumps({
+                    "type": "message_edited",
+                    "messageId": message_id,
+                    "message": parsed["message"]
+                })
+
+                await manager.send_personal_message(
+                    msg["senderId"],
+                    payload
+                )
+
+                await manager.send_personal_message(
+                    msg["receiverId"],
+                    payload
+                )
+
+                continue
+
+            # ================= DELETE MESSAGE =================
+            if event == "delete_message":
+
+                message_id = parsed["messageId"]
+
+                msg = await db.messages.find_one({
+                    "_id": ObjectId(message_id)
+                })
+
+                if not msg:
+                    continue
+
+                # SECURITY CHECK
+                if msg["senderId"] != user_id:
+                    continue
+
+                await db.messages.update_one(
+                    {"_id": ObjectId(message_id)},
+                    {
+                        "$set": {
+                            "deleted": True,
+                            "message": ""
+                        }
+                    }
+                )
+
+                payload = json.dumps({
+                    "type": "message_deleted",
+                    "messageId": message_id
+                })
+
+                await manager.send_personal_message(
+                    msg["senderId"],
+                    payload
+                )
+
+                await manager.send_personal_message(
+                    msg["receiverId"],
+                    payload
+                )
+
+                continue
 
             # ================= SEND MESSAGE =================
-            now = datetime.now(timezone.utc)
+            if event == "message":
 
-            receiver_online = parsed["receiverId"] in manager.active_connections
+                now = datetime.now(timezone.utc)    
+  
+                receiver_online = parsed["receiverId"] in manager.active_connections
 
-            message_doc = {
-                "senderId": parsed["senderId"],
-                "receiverId": parsed["receiverId"],
-                "message": parsed["message"],
-                "createdAt": now,
-                "status": "delivered" if receiver_online else "sent"
-            }
+                message_doc = {
+                    "senderId": parsed["senderId"],
+                    "receiverId": parsed["receiverId"],
+                    "message": parsed["message"],
+                    "createdAt": now,
+                    "status": ("delivered" if receiver_online else "sent"),
+                    "edited": False,
+                    "deleted": False,
+                    "seen": False
+                
+                }
 
-            await db.messages.insert_one(message_doc)
+                result = await db.messages.insert_one(message_doc)
 
-            response = {
+                response = {
                 "type": "message",
                 "data": {
+                    "id": str(result.inserted_id),
                     "senderId": parsed["senderId"],
                     "receiverId": parsed["receiverId"],
                     "message": parsed["message"],
                     "createdAt": now.isoformat(),
-                    "status": "delivered" if receiver_online else "sent"
+                    "status": ("delivered" if receiver_online else "sent"),
+                    "edited": False,
+                    "deleted": False,
+                    "seen": False
                 }
             }
 
@@ -156,6 +254,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
             await manager.send_personal_message(parsed["receiverId"], payload)
             await manager.send_personal_message(parsed["senderId"], payload)
+
+            continue
 
     except Exception as e:
         print("WebSocket error:", e)

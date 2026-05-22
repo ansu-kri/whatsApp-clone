@@ -5,7 +5,11 @@ import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
 import { getSocket, sendSocketMessage } from "../socket/socket";
 import { useGetMeQuery } from "../app/userApi";
-import { useGetMessageQuery } from "../app/messageApi";
+import {
+  useDeleteMessageMutation,
+  useEditMessageMutation,
+  useGetMessageQuery,
+} from "../app/messageApi";
 import { skipToken } from "@reduxjs/toolkit/query";
 
 type Props = {
@@ -18,6 +22,9 @@ export default function ChatWindow({ user, onBack }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(
+    null,
+  );
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -25,6 +32,8 @@ export default function ChatWindow({ user, onBack }: Props) {
   const meRef = useRef<any>(null);
 
   const { data: me } = useGetMeQuery();
+  const [editMessageApi] = useEditMessageMutation();
+  const [deleteMessageApi] = useDeleteMessageMutation();
 
   useEffect(() => {
     meRef.current = me;
@@ -53,8 +62,15 @@ export default function ChatWindow({ user, onBack }: Props) {
     if (!oldMessages) return;
 
     const normalized = oldMessages.map((m: any) => ({
-      ...m,
+      id: m._id?.toString?.() || m.id, 
+      senderId: m.senderId,
+      receiverId: m.receiverId,
+      message: m.message,
+      createdAt: m.createdAt,
       status: m.status || (m.seen ? "seen" : "sent"),
+      seen: m.seen || false,
+      edited: m.edited || false,
+      deleted: m.deleted || false,
     }));
 
     setMessages(normalized);
@@ -95,54 +111,54 @@ export default function ChatWindow({ user, onBack }: Props) {
         setOnlineUsers((prev) => prev.filter((id) => id !== data.userId));
       }
 
-      // NEW MESSAGE
+      // ================= NEW MESSAGE =================
       if (data.type === "message") {
         const newMessage = {
           ...data.data,
+          id: data.data.id,
           status: data.data.status || "sent",
+          edited: data.data.edited || false,
+          deleted: data.data.deleted || false,
         };
 
         setMessages((prev) => {
-          const index = prev.findIndex(
-            (msg) =>
-              msg.senderId === newMessage.senderId &&
-              msg.receiverId === newMessage.receiverId &&
-              msg.createdAt === newMessage.createdAt,
-          );
+          const exists = prev.some((msg) => msg.id === newMessage.id);
 
-          if (index !== -1) {
-            const updated = [...prev];
-            updated[index] = {
-              ...updated[index],
-              ...newMessage,
-            };
-            return updated;
+          if (exists) {
+            return prev.map((msg) =>
+              msg.id === newMessage.id ? { ...msg, ...newMessage } : msg,
+            );
           }
 
           return [...prev, newMessage];
         });
       }
 
-      // SYNC MESSAGES
+      // ================= SYNC MESSAGES =================
       if (data.type === "sync_messages") {
         const normalized = data.data.map((msg: any) => ({
-          ...msg,
+          id: msg.id || msg._id,          
+          senderId: msg.senderId,
+          receiverId: msg.receiverId,
+          message: msg.message,
+          createdAt: msg.createdAt,
           status: msg.status || (msg.seen ? "seen" : "sent"),
+          seen: msg.seen || false,
+          edited: msg.edited || false,
+          deleted: msg.deleted || false,
         }));
 
         setMessages((prev) => {
           const merged = [...prev];
 
-          normalized.forEach((msg: any) => {
-            const index = merged.findIndex(
-              (m) =>
-                m.senderId === msg.senderId &&
-                m.receiverId === msg.receiverId &&
-                m.createdAt === msg.createdAt,
-            );
+          normalized.forEach((msg: ChatMessage) => {
+            const index = merged.findIndex((m) => m.id === msg.id);
 
             if (index !== -1) {
-              merged[index] = { ...merged[index], ...msg };
+              merged[index] = {
+                ...merged[index],
+                ...msg,
+              };
             } else {
               merged.push(msg);
             }
@@ -150,6 +166,36 @@ export default function ChatWindow({ user, onBack }: Props) {
 
           return merged;
         });
+      }
+
+      // ================= MESSAGE EDITED =================
+      if (data.type === "message_edited") {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === data.messageId
+              ? {
+                  ...msg,
+                  message: data.message,
+                  edited: true,
+                }
+              : msg,
+          ),
+        );
+      }
+
+      // ================= MESSAGE DELETED =================
+      if (data.type === "message_deleted") {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === data.messageId
+              ? {
+                  ...msg,
+                  deleted: true,
+                  message: "",
+                }
+              : msg,
+          ),
+        );
       }
 
       // TYPING
@@ -197,9 +243,33 @@ export default function ChatWindow({ user, onBack }: Props) {
   }, [messages]);
 
   // ================= SEND MESSAGE =================
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!message.trim() || !me?.id) return;
 
+    // ================= EDIT MESSAGE =================
+    if (editingMessage) {
+      try {
+        await editMessageApi({
+          id: editingMessage.id!,
+          message,
+        }).unwrap();
+
+        sendSocketMessage({
+          type: "edit_message",
+          messageId: editingMessage.id,
+          message,
+        });
+
+        setEditingMessage(null);
+        setMessage("");
+      } catch (err) {
+        console.error("Edit failed", err);
+      }
+
+      return;
+    }
+
+    // ================= NEW MESSAGE =================
     sendSocketMessage({
       type: "message",
       senderId: me.id,
@@ -211,63 +281,95 @@ export default function ChatWindow({ user, onBack }: Props) {
     setMessage("");
   };
 
-return (
-  <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] ">
+  //Delete message
+  const handleDeleteMessage = async (msg: ChatMessage) => {
+  if (!msg.id) {
+    console.error("❌ Cannot delete message: missing id", msg);
+    return;
+  }
 
-    {/* HEADER */}
-    <div className="shadow-sm">
-      <ChatHeader user={user} isOnline={onlineUsers.includes(user.id)} onBack={onBack} />
-    </div>
+  try {
+    await deleteMessageApi(msg.id).unwrap();
 
-    {/* CHAT AREA */}
-    <div className="flex-1 overflow-y-auto px-6 md:px-10 py-6 space-y-4">
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msg.id
+          ? { ...m, deleted: true, message: "" }
+          : m
+      )
+    );
 
-      {/* WELCOME */}
-      <div className="text-center mb-6">
-        <h2 className="text-lg font-semibold text-gray-500">
-          Chat with {user.name}
-        </h2>
-        <p className="text-sm text-gray-400">
-          Secure real-time messaging ⚡
-        </p>
-      </div>
+  } catch (err) {
+    console.error("Delete failed", err);
+  }
+};
 
-      {/* MESSAGES */}
-      <div className="space-y-3">
-        {messages.map((chat, i) => (
-          <div key={i} className="animate-fadeIn">
-            <MessageBubble message={chat} currentUserId={me?.id || ""} />
-          </div>
-        ))}
-      </div>
+  const handleEditMessage = (msg: ChatMessage) => {
+    setEditingMessage(msg);
+    setMessage(msg.message);
+  };
 
-      {/* TYPING */}
-      {typingUser === user.id && (
-        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow w-fit">
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></span>
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-300"></span>
-          <p className="text-sm text-gray-500">typing...</p>
-        </div>
-      )}
-
-      <div ref={bottomRef} />
-    </div>
-
-    {/* INPUT */}
-    <div className="sticky bottom-0 px-4 md:px-8 py-4 bg-white/800 backdrop-blur-xl">
-      <div className="max-w-5xl mx-auto bg-white/800 rounded-2xl shadow-md px-3 py-2">
-        <MessageInput
-          message={message}
-          setMessage={setMessage}
-          onSend={sendMessage}
-          socket={socket}
-          meId={me?.id}
-          receiverId={user.id}
+  return (
+    <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] ">
+      {/* HEADER */}
+      <div className="shadow-sm">
+        <ChatHeader
+          user={user}
+          isOnline={onlineUsers.includes(user.id)}
+          onBack={onBack}
         />
       </div>
-    </div>
 
-  </div>
-);
+      {/* CHAT AREA */}
+      <div className="flex-1 overflow-y-auto px-6 md:px-10 py-6 space-y-4">
+        {/* WELCOME */}
+        <div className="text-center mb-6">
+          <h2 className="text-lg font-semibold text-gray-500">
+            Chat with {user.name}
+          </h2>
+          <p className="text-sm text-gray-400">Secure real-time messaging ⚡</p>
+        </div>
+
+        {/* MESSAGES */}
+        <div className="space-y-3">
+          {messages.map((chat) => (
+            <div key={chat.id} className="animate-fadeIn">
+              <MessageBubble
+                message={chat}
+                currentUserId={me?.id || ""}
+                onEdit={handleEditMessage}
+                onDelete={handleDeleteMessage}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* TYPING */}
+        {typingUser === user.id && (
+          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow w-fit">
+            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
+            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></span>
+            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-300"></span>
+            <p className="text-sm text-gray-500">typing...</p>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* INPUT */}
+      <div className="sticky bottom-0 px-4 md:px-8 py-4 bg-white/800 backdrop-blur-xl">
+        <div className="max-w-5xl mx-auto bg-white/800 rounded-2xl shadow-md px-3 py-2">
+          <MessageInput
+            message={message}
+            setMessage={setMessage}
+            onSend={sendMessage}
+            socket={socket}
+            meId={me?.id}
+            receiverId={user.id}
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
