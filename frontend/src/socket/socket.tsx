@@ -2,9 +2,12 @@ let socket: WebSocket | null = null;
 let currentUserId: string | null = null;
 let isConnecting = false;
 
-export const getSocket = (userId: string) => {
-  currentUserId = userId;
+export const getSocket = (
+  userId: string
+) => {
 
+  currentUserId = userId;
+  // already open
   if (
     socket &&
     socket.readyState === WebSocket.OPEN
@@ -12,6 +15,7 @@ export const getSocket = (userId: string) => {
     return socket;
   }
 
+  // still connecting
   if (
     socket &&
     socket.readyState === WebSocket.CONNECTING
@@ -19,7 +23,9 @@ export const getSocket = (userId: string) => {
     return socket;
   }
 
-  if (isConnecting) return socket;
+  if (isConnecting) {
+    return socket;
+  }
 
   isConnecting = true;
 
@@ -28,54 +34,86 @@ export const getSocket = (userId: string) => {
   );
 
   socket.onopen = () => {
-    console.log("✅ Socket connected:", userId);
+
+    console.log(
+      "✅ Socket connected:",
+      userId
+    );
+
     isConnecting = false;
   };
 
   socket.onclose = () => {
-    console.log("❌ Socket disconnected");
-    socket = null;
+
+    console.log(
+      "❌ Socket disconnected"
+    );
+
     isConnecting = false;
 
+    socket = null;
+
+    // reconnect
     setTimeout(() => {
+
       if (currentUserId) {
-        console.log("♻ Reconnecting socket...");
+
+        console.log(
+          "♻ Reconnecting socket..."
+        );
+
         getSocket(currentUserId);
       }
+
     }, 1500);
   };
-//   socket.onclose = () => {
-//   console.log("❌ Socket disconnected");
-//   socket = null;
-//   isConnecting = false;
-// };
 
   socket.onerror = (err) => {
-    console.log("❌ Socket error:", err);
+
+    console.log(
+      "❌ Socket error:",
+      err
+    );
   };
 
   return socket;
 };
 
-export const sendSocketMessage = (data: any) => {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    console.log("❌ Socket not ready, retrying...");
+export const getCurrentSocket = () => {
+  return socket;
+};
 
-    // retry once after reconnect
-    setTimeout(() => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(data));
-      }
-    }, 300);
+export const sendSocketMessage = (
+  data: any
+) => {
+
+  if (
+    !socket ||
+    socket.readyState !== WebSocket.OPEN
+  ) {
+
+    console.log(
+      "❌ Socket not ready"
+    );
 
     return false;
   }
 
   try {
-    socket.send(JSON.stringify(data));
+
+    socket.send(
+      JSON.stringify(data)
+    );
+
     return true;
+
   } catch (err) {
-    console.log("❌ Send failed:", err);
+
+    console.log(
+      "❌ Send failed:",
+      err
+    );
+
     return false;
   }
 };

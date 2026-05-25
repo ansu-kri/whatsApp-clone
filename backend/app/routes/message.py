@@ -9,7 +9,10 @@ router = APIRouter(
 )
 
 @router.get("/{senderId}/{receiverId}")
-async def get_messages(senderId: str, receiverId: str):
+async def get_messages(
+    senderId: str,
+    receiverId: str
+):
 
     messages = []
 
@@ -28,14 +31,32 @@ async def get_messages(senderId: str, receiverId: str):
 
     async for doc in cursor:
 
-        doc["id"] = str(doc["_id"])
-        del doc["_id"]
+        created_at = doc.get("createdAt")
 
-        # convert datetime properly
-        if "createdAt" in doc:
-            doc["createdAt"] = doc["createdAt"].isoformat()
+        # Mongo removes timezone info
+        if created_at and created_at.tzinfo is None:
+            created_at = created_at.replace(
+                tzinfo=timezone.utc
+            )
 
-        messages.append(doc)
+        messages.append({
+            "id": str(doc["_id"]),
+            "senderId": doc["senderId"],
+            "receiverId": doc["receiverId"],
+            "message": doc["message"],
+
+            # IMPORTANT FIX
+            "createdAt": (
+                created_at
+                .isoformat()
+                .replace("+00:00", "Z")
+            ) if created_at else None,
+
+            "status": doc.get("status", "sent"),
+            "edited": doc.get("edited", False),
+            "deleted": doc.get("deleted", False),
+            "seen": doc.get("seen", False),
+        })
 
     return messages
 

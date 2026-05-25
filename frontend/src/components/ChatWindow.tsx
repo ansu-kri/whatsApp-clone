@@ -15,9 +15,12 @@ import { skipToken } from "@reduxjs/toolkit/query";
 type Props = {
   user: ChatUser;
   onBack?: () => void;
+  setRecentMessages: React.Dispatch<
+    React.SetStateAction<Record<string, string>>
+  >;
 };
 
-export default function ChatWindow({ user, onBack }: Props) {
+export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
@@ -62,7 +65,7 @@ export default function ChatWindow({ user, onBack }: Props) {
     if (!oldMessages) return;
 
     const normalized = oldMessages.map((m: any) => ({
-      id: m._id?.toString?.() || m.id, 
+      id: m._id?.toString?.() || m.id,
       senderId: m.senderId,
       receiverId: m.receiverId,
       message: m.message,
@@ -74,7 +77,20 @@ export default function ChatWindow({ user, onBack }: Props) {
     }));
 
     setMessages(normalized);
-  }, [oldMessages]);
+
+    // ================= UPDATE SIDEBAR =================
+    if (normalized.length > 0) {
+      const lastMsg = normalized[normalized.length - 1];
+
+      setRecentMessages((prev) => ({
+        ...prev,
+
+        [user.id]: lastMsg.deleted
+          ? "This message was deleted"
+          : lastMsg.message,
+      }));
+    }
+  }, [oldMessages, user.id, setRecentMessages]);
 
   // ================= MARK AS SEEN =================
   useEffect(() => {
@@ -132,12 +148,34 @@ export default function ChatWindow({ user, onBack }: Props) {
 
           return [...prev, newMessage];
         });
+
+        setRecentMessages((prev) => ({
+          ...prev,
+
+          [newMessage.senderId === meRef.current?.id
+            ? newMessage.receiverId
+            : newMessage.senderId]: newMessage.deleted
+            ? "This message was deleted"
+            : newMessage.message,
+        }));
+
+        //===Instant seen ====
+        if (
+          newMessage.receiverId === meRef.current?.id &&
+          newMessage.senderId === user.id
+        ) {
+          sendSocketMessage({
+            type: "seen",
+            senderId: newMessage.senderId,
+            receiverId: meRef.current.id,
+          });
+        }
       }
 
       // ================= SYNC MESSAGES =================
       if (data.type === "sync_messages") {
         const normalized = data.data.map((msg: any) => ({
-          id: msg.id || msg._id,          
+          id: msg.id || msg._id,
           senderId: msg.senderId,
           receiverId: msg.receiverId,
           message: msg.message,
@@ -213,11 +251,11 @@ export default function ChatWindow({ user, onBack }: Props) {
 
       // ================= SEEN UPDATE (FIXED) =================
       if (data.type === "seen_update") {
-        const { senderId, receiverId } = data;
+        // const { senderId, receiverId } = data;
 
         setMessages((prev) =>
           prev.map((msg) => {
-            if (msg.senderId === senderId && msg.receiverId === receiverId) {
+            if (data.messageIds?.includes(msg.id)) {
               return {
                 ...msg,
                 status: "seen",
@@ -283,26 +321,23 @@ export default function ChatWindow({ user, onBack }: Props) {
 
   //Delete message
   const handleDeleteMessage = async (msg: ChatMessage) => {
-  if (!msg.id) {
-    console.error("❌ Cannot delete message: missing id", msg);
-    return;
-  }
+    if (!msg.id) {
+      console.error("❌ Cannot delete message: missing id", msg);
+      return;
+    }
 
-  try {
-    await deleteMessageApi(msg.id).unwrap();
+    try {
+      await deleteMessageApi(msg.id).unwrap();
 
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msg.id
-          ? { ...m, deleted: true, message: "" }
-          : m
-      )
-    );
-
-  } catch (err) {
-    console.error("Delete failed", err);
-  }
-};
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msg.id ? { ...m, deleted: true, message: "" } : m,
+        ),
+      );
+    } catch (err) {
+      console.error("Delete failed", err);
+    }
+  };
 
   const handleEditMessage = (msg: ChatMessage) => {
     setEditingMessage(msg);

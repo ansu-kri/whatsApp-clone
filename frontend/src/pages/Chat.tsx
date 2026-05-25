@@ -9,21 +9,38 @@ export default function Chat() {
 
   const [onlineUsers] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
+  const [recentMessages, setRecentMessages] = useState<
+  Record<string, string>
+>({});
 
   const users: ChatUser[] = useMemo(
-    () =>
-      apiUsers.map((user) => ({
-        id: user.id,
-        name: user.name,
-        avatar: `https://i.pravatar.cc/150?u=${user.id}`,
-        recentMessage: "",
-        lastChatTime: "",
-        chats: [],
-        isOnline: onlineUsers.includes(user.id),
-        // isOnline: true,
-      })),
-    [apiUsers, onlineUsers],
-  );
+  () =>
+    apiUsers.map((user) => ({
+
+      id: user.id,
+
+      name: user.name,
+
+      avatar:
+        `https://i.pravatar.cc/150?u=${user.id}`,
+
+      recentMessage:
+        recentMessages[user.id] || "",
+
+      lastChatTime: "",
+
+      chats: [],
+
+      isOnline:
+        onlineUsers.includes(user.id),
+
+      typing: false,
+
+      unreadCount: 0,
+    })),
+
+  [apiUsers, onlineUsers, recentMessages]
+);
 
   useEffect(() => {
     if (users.length > 0 && !selectedUser) {
@@ -51,7 +68,8 @@ export default function Chat() {
           <ChatWindow 
           key={selectedUser.id}
           user={selectedUser}
-          onBack={() => setSelectedUser(null)} />
+          onBack={() => setSelectedUser(null)}
+          setRecentMessages={setRecentMessages} />
         ) : (
           <div className="flex-1 h-screen bg-gradient-to-br from-[#1a1325] via-[#20163a] to-[#0b0814] flex items-center justify-center">
             <div className="text-center">

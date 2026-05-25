@@ -106,6 +106,17 @@ async def websocket_endpoint(websocket: WebSocket):
             # ================= SEEN =================
             if event == "seen":
 
+                messages = await db.messages.find({
+                    "senderId": parsed["senderId"],
+                    "receiverId": parsed["receiverId"],
+                    "seen": False
+                }).to_list(None)
+
+                message_ids =[
+                    str(msg["_id"])
+                    for msg in messages
+                ]
+
                 await db.messages.update_many(
                     {
                         "senderId": parsed["senderId"],
@@ -122,6 +133,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     parsed["senderId"],
                     json.dumps({
                         "type": "seen_update",
+                        "messageIds": message_ids,
                         "from": parsed["receiverId"]
                     })
                 )

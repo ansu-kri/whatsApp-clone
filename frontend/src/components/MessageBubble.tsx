@@ -55,26 +55,23 @@ export default function MessageBubble({
         )}
         {/* MESSAGE */}
         <p className="text-sm">
-  {Boolean(message.deleted) ? (
-    <span className="italic text-gray-400">
-      This message was deleted
-    </span>
-  ) : (
-    message.message
-  )}
-</p>
+          {Boolean(message.deleted) ? (
+            <span className="italic text-gray-400">
+              This message was deleted
+            </span>
+          ) : (
+            message.message
+          )}
+        </p>
         {/* FOOTER */}
 
         <div className="text-[11px] text-gray-500 mt-1 flex justify-end gap-1 items-center">
-           {Boolean(message.edited) &&
-    !Boolean(message.deleted) && (
-      <span className="italic">
-        edited
-      </span>
-  )}
+          {Boolean(message.edited) && !Boolean(message.deleted) && (
+            <span className="italic">edited</span>
+          )}
           <span>
             {new Date(message.createdAt).toLocaleTimeString("en-IN", {
-              timeZone: "Asia/Kolkata",
+              // timeZone: "Asia/Kolkata",
               hour: "2-digit",
               minute: "2-digit",
               hour12: true,

@@ -18,4 +18,6 @@ export type ChatUser = {
   lastChatTime: string;
   chats: ChatMessage[];
   isOnline: boolean;
+  typing?: boolean;
+  unreadCount?: number;
 };
