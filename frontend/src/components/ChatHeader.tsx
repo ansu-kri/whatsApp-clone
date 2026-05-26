@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useLogoutMutation } from "../app/auth/authApi";
 import { useNavigate } from "react-router-dom";
 import AccountModal from "./AccountModal";
+import { useGetMeQuery } from "@/app/userApi";
 
 type Props = {
-  user: Pick<ChatUser, "id" | "name" | "avatar">;
+  user: Pick<ChatUser, "id" | "name" | "avatar" | "createdAt">;
   isOnline?: boolean;
   onBack?: () => void;
 };
@@ -15,6 +16,7 @@ export default function ChatHeader({ user, isOnline, onBack, }: Props) {
   const [logout, { isLoading }] = useLogoutMutation();
   const navigate = useNavigate();
   const [openProfile, setOpenProfile] = useState(false);
+  const { data: me } = useGetMeQuery();
 
   const handleLogout = async () => {
     try {
@@ -111,9 +113,10 @@ export default function ChatHeader({ user, isOnline, onBack, }: Props) {
         open={openProfile}
         onClose={() => setOpenProfile(false)}
         user={{
-          name: user.name,
-          avatar: user.avatar,
-          email: "user@gmail.com",
+          name: me?.name || "",
+          avatar: me?.avatar || user.avatar,
+          email: me?.email || "",
+          createdAt: me?.createdAt || "",
         }}
       />
     </>

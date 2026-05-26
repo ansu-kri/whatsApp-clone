@@ -20,4 +20,5 @@ export type ChatUser = {
   isOnline: boolean;
   typing?: boolean;
   unreadCount?: number;
+  createdAt?: string;
 };

@@ -21,7 +21,13 @@ async def get_me(token: str = Depends(oauth2_scheme)):
     return {
         "id": str(current_user["_id"]),
         "name": current_user["name"],
-        "email": current_user["email"]
+        "email": current_user["email"],
+        "avatar": current_user.get("avatar"),
+        "createdAt": (
+            current_user["createdAt"].isoformat()
+            if "createdAt" in current_user
+            else None
+        )
     }
 
 # //Get all users

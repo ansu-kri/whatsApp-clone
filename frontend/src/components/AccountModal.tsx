@@ -16,6 +16,7 @@ type Props = {
     name: string;
     avatar: string;
     email?: string;
+    createdAt?: string;
   };
 };
 
@@ -32,11 +33,8 @@ export default function AccountModal({
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
-
     if (!file) return;
-
     const imageUrl = URL.createObjectURL(file);
-
     setPreview(imageUrl);
     // upload image to cloudinary/backend here
   };
@@ -136,7 +134,13 @@ export default function AccountModal({
               </div>
 
               <span className="text-gray-200">
-                2024-11-14
+                {user.createdAt
+                ? new Date(user.createdAt).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "N/A"}
               </span>
             </div>
 

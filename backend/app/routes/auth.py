@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.database import db
 from passlib.context import CryptContext
 from app.utils.jwt import create_access_token
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -31,7 +32,9 @@ async def signup(data: dict):
     user = {
         "name": data["name"],
         "email": data["email"],
-        "password": hashed_password
+        "password": hashed_password,
+        "createdAt": datetime.now(timezone.utc),
+        "avatar": ""
     }
 
     await db.users.insert_one(user)
@@ -73,7 +76,16 @@ async def login(
 
     return {
         "access_token": token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user": {
+            "id": str(user["_id"]),
+            "name": user["name"],
+            "createdAt": (
+                user["createdAt"].isoformat()
+                if "createdAt" in user
+                else None
+            )
+        }
     }
 
 # //Logout
