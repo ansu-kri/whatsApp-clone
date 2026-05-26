@@ -275,6 +275,17 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         manager.disconnect(user_id, websocket)
 
+        #save last seen
+        await db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$set": {
+                    "lastSeen": datetime.utcnow()
+                }
+            }
+        )
+
+        #Broadcast offline
         await manager.broadcast(json.dumps({
             "type": "user_offline",
             "userId": user_id

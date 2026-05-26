@@ -21,4 +21,5 @@ export type ChatUser = {
   typing?: boolean;
   unreadCount?: number;
   createdAt?: string;
+  lastSeen?: string;
 };

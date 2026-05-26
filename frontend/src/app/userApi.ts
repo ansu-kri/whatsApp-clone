@@ -6,6 +6,7 @@ export interface User {
   email: string;
   avatar?: string;
   createdAt?: string;
+  lastSeen?: string;
 }
 
 export const userApis = apiSlice.injectEndpoints({

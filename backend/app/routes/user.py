@@ -57,7 +57,12 @@ async def get_users(token: str = Depends(oauth2_scheme)):
             users.append({
                 "id": str(user["_id"]),
                 "name": user["name"],
-                "email": user["email"]
+                "email": user["email"],
+                "lastSeen": (
+                    user["lastSeen"].isoformat()
+                    if user.get("lastSeen")
+                    else None
+                )
             })
 
         return users

@@ -7,12 +7,12 @@ import AccountModal from "./AccountModal";
 import { useGetMeQuery } from "@/app/userApi";
 
 type Props = {
-  user: Pick<ChatUser, "id" | "name" | "avatar" | "createdAt">;
+  user: Pick<ChatUser, "id" | "name" | "avatar" | "createdAt" | "lastSeen">;
   isOnline?: boolean;
   onBack?: () => void;
 };
 
-export default function ChatHeader({ user, isOnline, onBack, }: Props) {
+export default function ChatHeader({ user, isOnline, onBack }: Props) {
   const [logout, { isLoading }] = useLogoutMutation();
   const navigate = useNavigate();
   const [openProfile, setOpenProfile] = useState(false);
@@ -71,7 +71,40 @@ export default function ChatHeader({ user, isOnline, onBack, }: Props) {
                 isOnline ? "text-green-400" : "text-gray-400"
               }`}
             >
-              {isOnline ? "Online" : "Offline"}
+              {isOnline
+                ? "Online"
+                : user.lastSeen
+                  ? (() => {
+                      const lastSeenDate = new Date(user.lastSeen);
+                      const now = new Date();
+                      const isToday =
+                        lastSeenDate.toDateString() === now.toDateString();
+
+                      const yesterday = new Date();
+                      yesterday.setDate(now.getDate() - 1);
+                      const isYesterday =
+                        lastSeenDate.toDateString() ===
+                        yesterday.toDateString();
+
+                      const time = lastSeenDate.toLocaleTimeString("en-IN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      });
+
+                      if (isToday) {
+                        return `Last seen today at ${time}`;
+                      }
+
+                      if (isYesterday) {
+                        return `Last seen yesterday at ${time}`;
+                      }
+
+                      return `Last seen ${lastSeenDate.toLocaleDateString(
+                        "en-IN",
+                      )}`;
+                    })()
+                  : "Offline"}
             </p>
           </div>
         </div>

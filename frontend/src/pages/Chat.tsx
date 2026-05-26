@@ -16,27 +16,19 @@ export default function Chat() {
   const users: ChatUser[] = useMemo(
   () =>
     apiUsers.map((user) => ({
-
       id: user.id,
-
       name: user.name,
-
       avatar:
         `https://i.pravatar.cc/150?u=${user.id}`,
-
       recentMessage:
         recentMessages[user.id] || "",
-
       lastChatTime: "",
-
       chats: [],
-
       isOnline:
         onlineUsers.includes(user.id),
-
       typing: false,
-
       unreadCount: 0,
+      lastSeen: user.lastSeen || "",
     })),
 
   [apiUsers, onlineUsers, recentMessages]
