@@ -8,6 +8,7 @@ from app.routes.message import ( router as messageRouter )
 import json
 from datetime import datetime, timezone
 from bson import ObjectId
+from app.routes.upload import router as uploadRouter
 
 app = FastAPI()
 
@@ -24,6 +25,11 @@ app.include_router(
 app.include_router(
     messageRouter,
     prefix="/api/messages"
+)
+
+app.include_router(
+    uploadRouter,
+    prefix="/api/upload"
 )
 
 origins = [
@@ -155,11 +161,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 if msg["senderId"] != user_id:
                     continue
 
+                updated_message =(
+                    parsed.get("message") or ""
+                ).strip()
+
                 await db.messages.update_one(
                     {"_id": ObjectId(message_id)},
                     {
                         "$set": {
-                            "message": parsed["message"],
+                            "message": updated_message,
                             "edited": True
                         }
                     }
@@ -229,6 +239,17 @@ async def websocket_endpoint(websocket: WebSocket):
             # ================= SEND MESSAGE =================
             if event == "message":
 
+                #prevent empty message
+                message_text = (
+                    parsed.get("message") or ""
+                ).strip()
+                
+                image_url = parsed.get("image")
+                
+                #prevent empty message
+                if not message_text and not image_url:
+                    continue
+
                 now = datetime.now(timezone.utc)    
   
                 receiver_online = parsed["receiverId"] in manager.active_connections
@@ -236,7 +257,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 message_doc = {
                     "senderId": parsed["senderId"],
                     "receiverId": parsed["receiverId"],
-                    "message": parsed["message"],
+                    "message": message_text,
+                    "image": image_url,
                     "createdAt": now,
                     "status": ("delivered" if receiver_online else "sent"),
                     "edited": False,
@@ -251,18 +273,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 "type": "message",
                 "data": {
                     "id": str(result.inserted_id),
-                    "senderId": parsed["senderId"],
-                    "receiverId": parsed["receiverId"],
-                    "message": parsed["message"],
+                    **message_doc,
+                    # "senderId": parsed["senderId"],
+                    # "receiverId": parsed["receiverId"],
+                    # "message": parsed["message"],
                     "createdAt": now.isoformat(),
-                    "status": ("delivered" if receiver_online else "sent"),
-                    "edited": False,
-                    "deleted": False,
-                    "seen": False
+                    # "status": ("delivered" if receiver_online else "sent"),
+                    # "edited": False,
+                    # "deleted": False,
+                    # "seen": False
                 }
             }
 
-            payload = json.dumps(response)
+            payload = json.dumps(response, default=str)
 
             await manager.send_personal_message(parsed["receiverId"], payload)
             await manager.send_personal_message(parsed["senderId"], payload)
