@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket,WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import db
 from app.routes.auth import router as authRouter
@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.routes.upload import router as uploadRouter
+from app.routes.group import router as groupRouter
 
 app = FastAPI()
 
@@ -32,6 +33,11 @@ app.include_router(
     prefix="/api/upload"
 )
 
+app.include_router(
+    groupRouter,
+    prefix="/api/group"
+)
+
 origins = [
     "http://localhost:5173"
 ]
@@ -53,7 +59,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
         return
 
-    await manager.connect(user_id, websocket)
+    await manager.connect_user(user_id, websocket)
 
     try:
 
@@ -292,11 +298,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
             continue
 
-    except Exception as e:
-        print("WebSocket error:", e)
+    except WebSocketDisconnect:
+        print("Client disconnected")
 
     finally:
-        manager.disconnect(user_id, websocket)
+        manager.disconnect_user(user_id, websocket)
 
         #save last seen
         await db.users.update_one(
@@ -309,10 +315,63 @@ async def websocket_endpoint(websocket: WebSocket):
         )
 
         #Broadcast offline
-        await manager.broadcast(json.dumps({
+        await manager.broadcast_all(json.dumps({
             "type": "user_offline",
             "userId": user_id
         }))
+
+#============Group chat==============
+@app.websocket("/ws/group/{room_id}")
+async def websocket_group(
+    websocket: WebSocket, room_id: str
+):
+    await manager.connect_room(
+        room_id,
+        websocket
+    )
+
+    try:
+        while True:
+
+            data = await websocket.receive_text()
+            parsed = json.loads(data)
+            sender_id = parsed.get("senderId")
+            message = parsed.get("message")
+
+            if not message:
+                continue
+
+            #save message
+            message_doc = {
+                "roomId": room_id,
+                "senderId": sender_id,
+                "message": message,
+                "createdAt": datetime.utcnow()
+            }
+
+            result = await db.group_messages.insert_one(
+                message_doc
+            )
+            payload = json.dumps({
+                "type": "group_message",
+                "roomId": room_id,
+                "data": {
+                    "id": str(result.inserted_id),
+                    **message_doc,
+                    "createdAt": message_doc["createdAt"].isoformat()
+                }
+            })
+            await manager.broadcast_room(
+                room_id,
+                payload
+            )
+    except WebSocketDisconnect:
+        print("Group disconnected")
+    
+    finally:
+
+        manager.disconnect_room(room_id, websocket)
+
 
 @app.get("/")
 async def root():
