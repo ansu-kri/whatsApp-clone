@@ -15,7 +15,10 @@ async def verify_token(
             detail="Token missing"
         )
 
-    token = authorization.split(" ")[1]
+    parts = authorization.split(" ")
+    if len(parts) != 2:
+        raise HTTPException(status_code=401, detail="Invalid auth header")
+    token = parts[1]
 
     try:
 

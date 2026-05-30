@@ -1,4 +1,3 @@
-// import { ApiProvider } from "@reduxjs/toolkit/query/react";
 import apiSlice from "../api";
 import { clearCredentials } from "./authSlice";
 
@@ -7,16 +6,13 @@ export interface SignupRequest {
   email: string;
   password: string;
 }
-
 export interface SignupResponse {
   message: string;
 }
-
 export interface LoginRequest {
   email: string;
   password: string;
 }
-
 export interface LoginResponse {
   access_token: string;
   token_type: string;
@@ -52,6 +48,23 @@ export const authApis = apiSlice.injectEndpoints({
       },
     }),
 
+    // logout: builder.mutation<{ message: string }, void>({
+    //   query: () => ({
+    //     url: "/api/auth/logout",
+    //     method: "POST",
+    //   }),
+    //   async onQueryStarted(_, { dispatch, queryFulfilled }) {
+    //     try {
+    //       await queryFulfilled;
+    //     } catch (error) {
+    //       console.log("Logout failed", error);
+    //     } finally {
+    //       dispatch(clearCredentials());
+    //       dispatch(apiSlice.util.resetApiState());
+    //     }
+    //   },
+    //   invalidatesTags: ["Auth"],
+    // }),
     logout: builder.mutation<{ message: string }, void>({
       query: () => ({
         url: "/api/auth/logout",
@@ -62,12 +75,26 @@ export const authApis = apiSlice.injectEndpoints({
           await queryFulfilled;
         } catch (error) {
           console.log("Logout failed", error);
-        } finally {
-          dispatch(clearCredentials());
-          dispatch(apiSlice.util.resetApiState());
+        }
+
+        // Clear auth state
+        dispatch(clearCredentials());
+
+        // Reset ALL RTK Query cache
+        dispatch(apiSlice.util.resetApiState());
+
+        // Clear storage
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+
+        //reset UI state manually (you are missing this)
+        dispatch({ type: "chat/reset" });
+
+        //Close sockets (VERY IMPORTANT)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("logout"));
         }
       },
-      invalidatesTags: ["Auth"],
     }),
   }),
 });

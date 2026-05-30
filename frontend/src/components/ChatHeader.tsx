@@ -14,6 +14,9 @@ type Props = {
 
 export default function ChatHeader({ user, isOnline, onBack }: Props) {
   const [logout, { isLoading }] = useLogoutMutation();
+    console.log("ChatHeader user:", user);
+  console.log("lastSeen:", user.lastSeen);
+  console.log("isOnline:", isOnline);
   const navigate = useNavigate();
   const [openProfile, setOpenProfile] = useState(false);
   const { data: me } = useGetMeQuery();
@@ -75,7 +78,7 @@ export default function ChatHeader({ user, isOnline, onBack }: Props) {
                 ? "Online"
                 : user.lastSeen
                   ? (() => {
-                      const lastSeenDate = new Date(user.lastSeen);
+                      const lastSeenDate = new Date(Date.parse(user.lastSeen));
                       const now = new Date();
                       const isToday =
                         lastSeenDate.toDateString() === now.toDateString();
@@ -90,6 +93,7 @@ export default function ChatHeader({ user, isOnline, onBack }: Props) {
                         hour: "2-digit",
                         minute: "2-digit",
                         hour12: true,
+                        timeZone: "Asia/Kolkata"
                       });
 
                       if (isToday) {

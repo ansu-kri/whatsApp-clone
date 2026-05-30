@@ -4,6 +4,8 @@ from app.database import db
 from passlib.context import CryptContext
 from app.utils.jwt import create_access_token
 from datetime import datetime, timezone
+from bson import ObjectId
+from app.middleware.authMiddleware import verify_token
 
 router = APIRouter()
 
@@ -68,6 +70,11 @@ async def login(
             status_code=400,
             detail="Invalid password"
         )
+    
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"isOnline": True}}
+    )
 
     token = create_access_token({
         "user_id": str(user["_id"]),
@@ -90,7 +97,16 @@ async def login(
 
 # //Logout
 @router.post("/logout") 
-async def logout():
+async def logout(current_user: dict = Depends(verify_token)):
+    await db.users.update_one(
+        {"_id": ObjectId(current_user["user_id"])},
+        {
+            "$set": {
+                "isOnline": False,
+                "lastSeen": datetime.now(timezone.utc)
+            }
+        }
+    )
     return {"message": "Logged out successfully"}
 
 

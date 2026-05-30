@@ -1,119 +1,91 @@
-let socket: WebSocket | null = null;
+let sockets: Record<string, WebSocket> = {};
 let currentUserId: string | null = null;
-let isConnecting = false;
 
-export const getSocket = (
-  userId: string
-) => {
-
+export const getSocket = (userId: string) => {
   currentUserId = userId;
-  // already open
-  if (
-    socket &&
-    socket.readyState === WebSocket.OPEN
-  ) {
-    return socket;
+
+  const key = "private";
+
+  if (sockets[key]?.readyState === WebSocket.OPEN) {
+    return sockets[key];
   }
 
-  // still connecting
-  if (
-    socket &&
-    socket.readyState === WebSocket.CONNECTING
-  ) {
-    return socket;
+  if (sockets[key]?.readyState === WebSocket.CONNECTING) {
+    return sockets[key];
   }
 
-  if (isConnecting) {
-    return socket;
-  }
-
-  isConnecting = true;
-
-  socket = new WebSocket(
+  sockets[key] = new WebSocket(
     `ws://127.0.0.1:8000/ws/chat?userId=${userId}`
   );
 
-  socket.onopen = () => {
-
-    console.log(
-      "✅ Socket connected:",
-      userId
-    );
-
-    isConnecting = false;
+  sockets[key].onopen = () => {
+    console.log("Private socket connected");
   };
 
-  socket.onclose = () => {
+  sockets[key].onclose = () => {
+    console.log(" Private socket closed");
 
-    console.log(
-      "❌ Socket disconnected"
-    );
-
-    isConnecting = false;
-
-    socket = null;
-
-    // reconnect
     setTimeout(() => {
-
-      if (currentUserId) {
-
-        console.log(
-          "♻ Reconnecting socket..."
-        );
-
-        getSocket(currentUserId);
-      }
-
+      if (currentUserId) getSocket(currentUserId);
     }, 1500);
   };
 
-  socket.onerror = (err) => {
-
-    console.log(
-      "❌ Socket error:",
-      err
-    );
-  };
-
-  return socket;
+  return sockets[key];
 };
 
-export const getCurrentSocket = () => {
-  return socket;
+export const getGroupSocket = (groupId: string) => {
+  const key = `group_${groupId}`;
+
+  if (sockets[key]?.readyState === WebSocket.OPEN) {
+    return sockets[key];
+  }
+
+  if (sockets[key]?.readyState === WebSocket.CONNECTING) {
+    return sockets[key];
+  }
+
+  sockets[key] = new WebSocket(
+    `ws://127.0.0.1:8000/ws/group/${groupId}`
+  );
+
+  sockets[key].onopen = () => {
+    console.log("Group socket connected:", groupId);
+  };
+
+  sockets[key].onclose = () => {
+    console.log(" Group socket closed:", groupId);
+  };
+
+  sockets[key].onerror = (err) => {
+    console.log(" Group socket error:", err);
+  };
+
+  return sockets[key];
 };
 
 export const sendSocketMessage = (
-  data: any
+  data: any,
+  type: "private" | "group" = "private",
+  id?: string
 ) => {
+  let socket;
 
-  if (
-    !socket ||
-    socket.readyState !== WebSocket.OPEN
-  ) {
+  if (type === "group" && id) {
+    socket = sockets[`group_${id}`];
+  } else {
+    socket = sockets["private"];
+  }
 
-    console.log(
-      "❌ Socket not ready"
-    );
-
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    console.log(" Socket not ready");
     return false;
   }
 
   try {
-
-    socket.send(
-      JSON.stringify(data)
-    );
-
+    socket.send(JSON.stringify(data));
     return true;
-
   } catch (err) {
-
-    console.log(
-      "❌ Send failed:",
-      err
-    );
-
+    console.log(" Send failed:", err);
     return false;
   }
 };

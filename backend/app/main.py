@@ -309,7 +309,7 @@ async def websocket_endpoint(websocket: WebSocket):
             {"_id": ObjectId(user_id)},
             {
                 "$set": {
-                    "lastSeen": datetime.utcnow()
+                    "lastSeen": datetime.now(timezone.utc)
                 }
             }
         )

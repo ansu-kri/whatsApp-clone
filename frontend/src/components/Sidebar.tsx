@@ -1,14 +1,24 @@
 import { useMemo, useState } from "react";
 import type { ChatUser } from "./types";
-import { Search } from "lucide-react";
+import { Search, Plus, MessageSquare, Users } from "lucide-react";
 
 type Props = {
   users: ChatUser[];
   selectedUser?: ChatUser | null;
   onSelectUser: (user: ChatUser) => void;
+  activeTab: "chats" | "groups";
+  onTabChange: (tab: "chats" | "groups") => void;
+  onCreateGroup: () => void;
 };
 
-export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
+export default function Sidebar({
+  users,
+  selectedUser,
+  onSelectUser,
+  activeTab,
+  onTabChange,
+  onCreateGroup,
+}: Props) {
   const [search, setSearch] = useState("");
 
   const filteredUsers = useMemo(() => {
@@ -18,18 +28,25 @@ export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
   }, [users, search]);
 
   return (
-    <aside
-      className=" w-full sm:w-[340px] h-screen sm:relative fixed sm:static inset-y-0 left-0 bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] border-r border-white/10 flex flex-col z-40"
-    >
+    <aside className=" w-full sm:w-[340px] h-screen sm:relative fixed sm:static inset-y-0 left-0 bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] border-r border-white/10 flex flex-col z-40">
       {/* HEADER */}
       <div className="p-5 border-b border-white/10">
-        <h1 className="text-2xl font-bold text-white mb-4">Chatty</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-white">Chatty</h1>
+          <button
+            onClick={onCreateGroup}
+            className=" w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 transition flex items-center justify-center text-white shadow-lg shadow-purple-500/20"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
 
         {/* SEARCH */}
         <div className="relative">
-          <Search
-            size={18}
-            className=" absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"           />
+          {/* <Search
+            size={16}
+            className=" absolute left-1 top-1/2 -translate-y-1/2 text-gray-400"
+          /> */}
 
           <input
             type="text"
@@ -39,13 +56,40 @@ export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
             className=" w-full bg-[#1d1729] text-white placeholder:text-gray-500 pl-10 pr-4 py-3 rounded-xl outline-none border border-transparent focus:border-purple-500 transition-all
             "
           />
+          <div className="mt-4 flex bg-[#171122] rounded-xl p-1">
+            <button
+              onClick={() => onTabChange("chats")}
+              className={` flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition
+                ${
+                  activeTab === "chats"
+                    ? "bg-purple-600 text-white"
+                    : "text-gray-400 hover:text-white"
+                }
+              `}
+            >
+              <MessageSquare size={16} />
+              Chats
+            </button>
+
+            <button
+              onClick={() => onTabChange("groups")}
+              className={` flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition
+                ${
+                  activeTab === "groups"
+                  ? "bg-purple-600 text-white"
+                  : "text-gray-400 hover:text-white"
+               }
+              `}
+            >
+              <Users size={16} />
+              Groups
+            </button>
+          </div>
         </div>
       </div>
 
       {/* USERS */}
-      <div
-        className=" flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#3b2d56] "
-      >
+      <div className=" flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#3b2d56] ">
         {filteredUsers.map((user) => {
           const isActive = selectedUser?.id === user.id;
 
@@ -70,9 +114,7 @@ export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
                 />
 
                 {user.isOnline && (
-                  <span
-                    className=" absolute bottom-0 right-0 w-4 h-4 bg-green-400 border-2 border-[#120d1b] rounded-full"
-                  />
+                  <span className=" absolute bottom-0 right-0 w-4 h-4 bg-green-400 border-2 border-[#120d1b] rounded-full" />
                 )}
               </div>
 
@@ -80,15 +122,11 @@ export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
               <div className="flex-1 text-left min-w-0">
                 {/* TOP */}
                 <div className="flex justify-between items-center">
-                  <h3
-                    className=" font-semibold text-white truncate"
-                  >
+                  <h3 className=" font-semibold text-white truncate">
                     {user.name}
                   </h3>
 
-                  <span
-                    className=" text-xs text-gray-500"
-                  >
+                  <span className=" text-xs text-gray-500">
                     {user.lastChatTime}
                   </span>
                 </div>
@@ -110,9 +148,7 @@ export default function Sidebar({ users, selectedUser, onSelectUser }: Props) {
                   </p>
 
                   {!!user.unreadCount && (
-                    <span
-                      className=" ml-2 min-w-[20px] h-5 px-1 rounded-full bg-green-500 text-white text-[11px] flex items-center justify-center font-semibold"
-                    >
+                    <span className=" ml-2 min-w-[20px] h-5 px-1 rounded-full bg-green-500 text-white text-[11px] flex items-center justify-center font-semibold">
                       {user.unreadCount}
                     </span>
                   )}
