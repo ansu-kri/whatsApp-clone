@@ -3,6 +3,10 @@ import ChatWindow from "../components/ChatWindow";
 import type { ChatUser } from "../components/types";
 import { useEffect, useMemo, useState } from "react";
 import { useGetUsersQuery } from "../app/userApi";
+import CreateGroupModal from "@/components/CreateGroupModal";
+import { useGetGroupsQuery } from "@/app/groupApi";
+import { useSelector } from "react-redux";
+import type { Group } from "../components/Sidebar";
 
 export default function Chat() {
   const { data: apiUsers = [], isLoading } = useGetUsersQuery();
@@ -14,6 +18,12 @@ export default function Chat() {
   );
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
+  const userId = useSelector((state: any) => state.auth.user?.id)
+  const { data: groups = [] } =
+  useGetGroupsQuery(userId, {skip: !userId,});
+
+const [selectedGroup, setSelectedGroup] =
+  useState<Group | null>(null);
 
   const users: ChatUser[] = useMemo(
     () =>
@@ -48,11 +58,14 @@ export default function Chat() {
       <div className={`${selectedUser ? "hidden sm:block" : "block"} sm:block`}>
         <Sidebar
           users={users}
-          selectedUser={selectedUser}
-          onSelectUser={setSelectedUser}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onCreateGroup={() => setIsCreateGroupOpen(true)}
+  groups={groups}
+  selectedUser={selectedUser}
+  selectedGroup={selectedGroup}
+  onSelectUser={setSelectedUser}
+  onSelectGroup={setSelectedGroup}
+  activeTab={activeTab}
+  onTabChange={setActiveTab}
+  onCreateGroup={() => setIsCreateGroupOpen(true)}
         />
       </div>
 
@@ -93,6 +106,11 @@ export default function Chat() {
           </div>
         )}
       </div>
+      <CreateGroupModal
+      isOpen={isCreateGroupOpen}
+      onClose={() => setIsCreateGroupOpen(false)}
+      users={users}
+    />
     </div>
   );
 }

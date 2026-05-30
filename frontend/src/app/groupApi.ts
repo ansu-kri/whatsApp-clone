@@ -22,6 +22,13 @@ export interface CreateGroupResponse {
     groupId: string;
 }
 
+export interface Group {
+    id: string;
+    name: string;
+    members: string[],
+    groupImage: string;
+}
+
 export const groupApis = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
         //Upload image
@@ -77,6 +84,16 @@ export const groupApis = apiSlice.injectEndpoints({
                     groupImage,
                 },
             }),
+            invalidatesTags: ["Groups"],
+        }),
+        
+        //get group members
+        getGroups: builder.query<Group[], string>({
+            query: (userId) => ({
+                url: `/api/group/${userId}`,
+                method: "GET",
+            }),
+            providesTags: ["Groups"],
         }),
     }),
 });
@@ -86,4 +103,5 @@ export const {
     useUploadAudioMutation,
     useUploadVideoMutation,
     useCreateGroupMutation,
+    useGetGroupsQuery,
 } = groupApis;

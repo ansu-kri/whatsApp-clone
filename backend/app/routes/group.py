@@ -19,3 +19,20 @@ async def create_group(data:dict):
     return {
         "groupId": str(result.inserted_id)
     }
+
+@router.get("/{user_id}")
+async def get_user_group(user_id: str):
+    
+    groups = await db.groups.find({
+        "members": user_id
+    }).to_list(None)
+
+    return [
+        {
+            "id": str(group["_id"]),
+            "name": group["name"],
+            "members": group["members"],
+            "groupImage": group.get("groupImage")
+        }
+        for group in groups
+    ]
