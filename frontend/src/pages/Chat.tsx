@@ -7,6 +7,7 @@ import CreateGroupModal from "@/components/CreateGroupModal";
 import { useGetGroupsQuery } from "@/app/groupApi";
 import { useSelector } from "react-redux";
 import type { Group } from "../components/Sidebar";
+import GroupChatWindow from "@/components/GroupChatWindow";
 
 export default function Chat() {
   const { data: apiUsers = [], isLoading } = useGetUsersQuery();
@@ -18,12 +19,17 @@ export default function Chat() {
   );
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
-  const userId = useSelector((state: any) => state.auth.user?.id)
-  const { data: groups = [] } =
-  useGetGroupsQuery(userId, {skip: !userId,});
+  const userId = useSelector((state: any) => state.auth.user?.userId);
+  // console.log("userId", userId);
+  const { data: groups = [], refetch } = useGetGroupsQuery(userId, { skip: !userId,
+    refetchOnMountOrArgChange: true,
+   });
 
-const [selectedGroup, setSelectedGroup] =
-  useState<Group | null>(null);
+  useEffect(() => {
+    if(userId) refetch();
+  },[userId])
+
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
   const users: ChatUser[] = useMemo(
     () =>
@@ -58,14 +64,14 @@ const [selectedGroup, setSelectedGroup] =
       <div className={`${selectedUser ? "hidden sm:block" : "block"} sm:block`}>
         <Sidebar
           users={users}
-  groups={groups}
-  selectedUser={selectedUser}
-  selectedGroup={selectedGroup}
-  onSelectUser={setSelectedUser}
-  onSelectGroup={setSelectedGroup}
-  activeTab={activeTab}
-  onTabChange={setActiveTab}
-  onCreateGroup={() => setIsCreateGroupOpen(true)}
+          groups={groups}
+          selectedUser={selectedUser}
+          selectedGroup={selectedGroup}
+          onSelectUser={setSelectedUser}
+          onSelectGroup={setSelectedGroup}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onCreateGroup={() => setIsCreateGroupOpen(true)}
         />
       </div>
 
@@ -77,6 +83,11 @@ const [selectedGroup, setSelectedGroup] =
             user={selectedUser}
             onBack={() => setSelectedUser(null)}
             setRecentMessages={setRecentMessages}
+          />
+        ) : selectedGroup ? (
+          <GroupChatWindow
+            group={selectedGroup}
+            onBack={() => setSelectedGroup(null)}
           />
         ) : (
           <div className="flex-1 h-screen bg-gradient-to-br from-[#1a1325] via-[#20163a] to-[#0b0814] flex items-center justify-center">
@@ -107,10 +118,10 @@ const [selectedGroup, setSelectedGroup] =
         )}
       </div>
       <CreateGroupModal
-      isOpen={isCreateGroupOpen}
-      onClose={() => setIsCreateGroupOpen(false)}
-      users={users}
-    />
+        isOpen={isCreateGroupOpen}
+        onClose={() => setIsCreateGroupOpen(false)}
+        users={users}
+      />
     </div>
   );
 }

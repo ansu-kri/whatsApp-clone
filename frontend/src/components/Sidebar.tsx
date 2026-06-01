@@ -12,32 +12,24 @@ export interface Group {
 type Props = {
   users: ChatUser[];
   groups: Group[];
-
   selectedUser?: ChatUser | null;
   selectedGroup?: Group | null;
-
   onSelectUser: (user: ChatUser) => void;
   onSelectGroup: (group: Group) => void;
-
   activeTab: "chats" | "groups";
   onTabChange: (tab: "chats" | "groups") => void;
-
   onCreateGroup: () => void;
 };
 
 export default function Sidebar({
   users,
   groups,
-
   selectedUser,
   selectedGroup,
-
   onSelectUser,
   onSelectGroup,
-
   activeTab,
   onTabChange,
-
   onCreateGroup,
 }: Props) {
   const [search, setSearch] = useState("");
