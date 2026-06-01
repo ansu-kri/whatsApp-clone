@@ -16,6 +16,7 @@ export interface CreateGroupRequest {
     name: string;
     members: string[];
     groupImage?: string;
+    createdBy: string;
 }
 
 export interface CreateGroupResponse {
@@ -75,13 +76,14 @@ export const groupApis = apiSlice.injectEndpoints({
 
         // create group
         createGroup: builder.mutation<CreateGroupResponse, CreateGroupRequest>({
-            query: ({ name, members, groupImage }) => ({
+            query: ({ name, members, groupImage, createdBy, }) => ({
                 url: `/api/group/create`,
                 method: "POST",
                 body: {
                     name,
                     members,
                     groupImage,
+                    createdBy,
                 },
             }),
             invalidatesTags: ["Groups"],

@@ -32,7 +32,7 @@ function Login() {
         })
       );
 
-      toast.success("Login success 🚀");
+      toast.success("Login success");
       navigate("/chat");
     } catch (err: any) {
       const message = err?.data?.detail;

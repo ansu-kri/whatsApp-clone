@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { X, Users } from "lucide-react";
 import { useCreateGroupMutation, useUploadImageMutation } from "@/app/groupApi";
+import toast from "react-hot-toast";
+import { useSelector } from "react-redux";
 
 type User = {
   id: string;
@@ -24,6 +26,7 @@ export default function CreateGroupModal({
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [createGroup, { isLoading }] = useCreateGroupMutation();
   const [uploadImage] = useUploadImageMutation();
+  const userId = useSelector((state: any) => state.auth.user?.userId)
 
   if (!isOpen) return null;
 
@@ -35,44 +38,40 @@ export default function CreateGroupModal({
     );
   };
 
+const handleCreate = async () => {
+  try {
+    let imageUrl = "";
 
-  const handleCreate = async () => {
-    try {
-      let imageUrl = "";
-      //Upload image first if selected
-      if(groupImage) {
-        const imageResponse = await uploadImage(groupImage).unwrap();
-        imageUrl = imageResponse.imageUrl;
-      }
-      const response = await createGroup({
-        name: groupName,
-        members: selectedMembers,
-        groupImage: imageUrl,
-      }).unwrap();
-      console.log("group created:", response.groupId);
-
-      //Reset form
-      setGroupName("");
-      setGroupImage(null);
-      setSelectedMembers([]);
-      onClose();
-    } catch (error) {
-      console.error("Failed to create group:", error);
+    if (groupImage) {
+      const imageResponse = await uploadImage(groupImage).unwrap();
+      imageUrl = imageResponse.imageUrl;
     }
-  };
-  // const handleCreate = async () => {
-  //   try {
-  //     console.log({
-  //       groupName,
-  //       selectedMembers,
-  //       groupImage,
-  //     });
 
-  //     onClose();
-  //   } catch (err) {
-  //     console.log(err);
-  //   }
-  // };
+    const response = await createGroup({
+      name: groupName,
+      members: selectedMembers,
+      groupImage: imageUrl,
+      createdBy: userId,
+    }).unwrap();
+
+    toast.success("Group created successfully");
+
+    console.log(response);
+
+    setGroupName("");
+    setGroupImage(null);
+    setSelectedMembers([]);
+
+    onClose();
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error(
+      error?.data?.detail ||
+      "Failed to create group"
+    );
+  }
+};
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">

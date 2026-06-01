@@ -27,7 +27,7 @@ function Signup() {
 
       console.log(res);
 
-      toast.success("Signup successful 🚀");
+      toast.success("Signup successful");
 
       navigate("/");
     } catch (err: any) {
