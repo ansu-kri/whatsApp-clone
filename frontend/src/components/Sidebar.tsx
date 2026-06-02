@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import type { ChatUser } from "./types";
 import { MessageSquare, Plus, Users } from "lucide-react";
-
+import type { ChatMessage } from "./types";
 export interface Group {
   id: string;
   name: string;
   members: string[];
   groupImage?: string;
+  avatar?: string;
+  messages: ChatMessage[];
 }
 
 type Props = {

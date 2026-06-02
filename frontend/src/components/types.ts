@@ -23,3 +23,11 @@ export type ChatUser = {
   createdAt?: string;
   lastSeen?: string;
 };
+
+export interface Group {
+  _id: string;
+  name: string;
+  avatar?: string;
+  members: any[];
+  messages: ChatMessage[];
+}
