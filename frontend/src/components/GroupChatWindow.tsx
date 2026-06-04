@@ -7,17 +7,20 @@ import type { ChatMessage } from "./types";
 
 type Props = {
   group: Group;
-  setMessage: (val: string) => void;
   onBack: () => void;
-  onSend: () => void;
   socket?: WebSocket | null;
 };
 
-export default function GroupChatWindow({ group, onBack, onSend }: Props) {
+export default function GroupChatWindow({ group, onBack}: Props) {
   const currentUserId = localStorage.getItem("userId") || "";
   const [message, setMessag] = useState("");
   // const socketRef = useRef<WebSocket | null>(null);
   // const socket = socketRef.current;
+
+  const handleSend = () => {
+    console.log(message);
+    setMessag("");
+  }
 
   return (
     <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814]">
@@ -25,7 +28,7 @@ export default function GroupChatWindow({ group, onBack, onSend }: Props) {
       <ChatHeader type="group" group={group} onBack={onBack} />
 
       {/* MEMBERS */}
-      <div className="px-4 py-3 border-b border-white/10">
+      <div className="px-4 py-3 ">
         <h3 className="text-sm text-gray-400 mb-2 text-center">Members</h3>
 
         <div className="flex flex-wrap justify-center gap-3">
@@ -60,12 +63,12 @@ export default function GroupChatWindow({ group, onBack, onSend }: Props) {
       </div>
 
       {/* INPUT */}
-      <div className="sticky bottom-0 px-4 md:px-8 py-4 bg-white/10 backdrop-blur-xl border-t border-white/10">
-        <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-md px-3 py-2">
+      <div className="sticky bottom-0 px-4 md:px-8 py-4">
+        <div >
           <GroupMessageInput
             message={message}
             setMessage={setMessag}
-            onSend={onSend}
+            onSend={handleSend}
           />
         </div>
       </div>

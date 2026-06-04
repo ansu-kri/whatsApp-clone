@@ -8,7 +8,7 @@ export interface Group {
   members: string[];
   groupImage?: string;
   avatar?: string;
-  messages: ChatMessage[];
+  messages?: ChatMessage[];
 }
 
 type Props = {
@@ -56,7 +56,6 @@ export default function Sidebar({
           <h1 className="text-2xl font-bold text-white">
             Chatty
           </h1>
-
           <button
             onClick={onCreateGroup}
             className="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 transition flex items-center justify-center text-white shadow-lg shadow-purple-500/20"
@@ -64,7 +63,6 @@ export default function Sidebar({
             <Plus size={18} />
           </button>
         </div>
-
         {/* SEARCH */}
         <input
           type="text"
@@ -77,7 +75,6 @@ export default function Sidebar({
           }
           className="w-full bg-[#1d1729] text-white placeholder:text-gray-500 px-4 py-3 rounded-xl outline-none border border-transparent focus:border-purple-500 transition-all"
         />
-
         {/* TABS */}
         <div className="mt-4 flex bg-[#171122] rounded-xl p-1">
           <button
@@ -91,7 +88,6 @@ export default function Sidebar({
             <MessageSquare size={16} />
             Chats
           </button>
-
           <button
             onClick={() => onTabChange("groups")}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition ${
@@ -105,14 +101,12 @@ export default function Sidebar({
           </button>
         </div>
       </div>
-
       {/* LIST */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#3b2d56]">
         {activeTab === "chats" &&
           filteredUsers.map((user) => {
             const isActive =
               selectedUser?.id === user.id;
-
             return (
               <button
                 key={user.id}
@@ -129,12 +123,10 @@ export default function Sidebar({
                     alt={user.name}
                     className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
                   />
-
                   {user.isOnline && (
                     <span className="absolute bottom-0 right-0 w-4 h-4 bg-green-400 border-2 border-[#120d1b] rounded-full" />
                   )}
                 </div>
-
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-white truncate">
@@ -145,7 +137,6 @@ export default function Sidebar({
                       {user.lastChatTime}
                     </span>
                   </div>
-
                   <div className="flex items-center justify-between mt-1">
                     <p
                       className={`text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[220px] ${
@@ -170,12 +161,10 @@ export default function Sidebar({
               </button>
             );
           })}
-
         {activeTab === "groups" &&
           filteredGroups.map((group) => {
             const isActive =
               selectedGroup?.id === group.id;
-
             return (
               <button
                 key={group.id}
@@ -196,7 +185,6 @@ export default function Sidebar({
                   alt={group.name}
                   className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
                 />
-
                 <div className="flex-1 text-left">
                   <h3 className="font-semibold text-white truncate">
                     {group.name}
@@ -209,7 +197,6 @@ export default function Sidebar({
               </button>
             );
           })}
-
         {activeTab === "groups" &&
           filteredGroups.length === 0 && (
             <div className="p-6 text-center text-gray-500">
