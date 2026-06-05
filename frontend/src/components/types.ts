@@ -31,3 +31,14 @@ export interface Group {
   members: any[];
   messages: ChatMessage[];
 }
+
+export interface GroupMessage {
+  id: string;
+  senderId: string;
+  groupId: string;
+  message: string;
+  createdAt: string;
+  status?: string;
+  edited?: boolean;
+  deleted?: boolean;
+}

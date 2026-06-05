@@ -1,11 +1,11 @@
 import { useState } from "react";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, GroupMessage } from "./types";
 
 type Props = {
-  message?: ChatMessage;
+  message?: ChatMessage | GroupMessage;
   currentUserId: string;
-  onEdit?: (msg: ChatMessage) => void;
-  onDelete?: (msg: ChatMessage) => void;
+  onEdit?: (msg: ChatMessage | GroupMessage) => void;
+  onDelete?: (msg: ChatMessage | GroupMessage) => void;
 };
 
 export default function GroupMessageBubble({

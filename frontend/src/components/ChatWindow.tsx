@@ -3,7 +3,7 @@ import type { ChatUser, ChatMessage } from "./types";
 import ChatHeader from "./ChatHeader";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
-import { getSocket, sendSocketMessage } from "../socket/socket";
+import { getSocket, sendSocketMessage } from "@/socket/socket";
 import { useGetMeQuery } from "../app/userApi";
 import {
   useDeleteMessageMutation,

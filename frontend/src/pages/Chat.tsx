@@ -88,6 +88,7 @@ export default function Chat() {
           <GroupChatWindow
             group={selectedGroup}
             onBack={() => setSelectedGroup(null)}
+            setRecentMessages={setRecentMessages}
           />
         ) : (
           <div className="flex-1 h-screen bg-gradient-to-br from-[#1a1325] via-[#20163a] to-[#0b0814] flex items-center justify-center">

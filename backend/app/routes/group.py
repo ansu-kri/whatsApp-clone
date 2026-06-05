@@ -28,7 +28,7 @@ async def create_group(data:dict):
         "groupId": str(result.inserted_id)
     }
 
-@router.get("/{user_id}")
+@router.get("/user/{user_id}")
 async def get_user_group(user_id: str):
     
     groups = await db.groups.find({
@@ -57,3 +57,20 @@ async def get_user_group(user_id: str):
         })
     
     return result
+
+@router.get("/messages/{groupId}")
+async def get_group_messages(groupId: str):
+    messages = await db.messages.find(
+        {"groupId": groupId}
+    ).sort("createdAt", 1).to_list(None)
+
+    return [
+        {
+            "id": str(msg["_id"]),
+            "senderId": msg["senderId"],
+            "groupId": msg["groupId"],
+            "message": msg["message"],
+            "createdAt": msg["createdAt"]
+        }
+        for msg in messages
+    ]

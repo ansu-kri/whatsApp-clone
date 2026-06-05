@@ -7,7 +7,7 @@ type Props = {
   onSend: () => void;
   socket?: WebSocket | null;
   meId?: string;
-  receiverId?: string;
+  groupId?: string;
 };
 
 export default function GroupMessageInput({
@@ -16,12 +16,10 @@ export default function GroupMessageInput({
   onSend,
   socket,
   meId,
-  receiverId,
+  groupId,
 }: Props) {
   const typingCooldownRef = useRef(false);
-
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const [showEmoji, setShowEmoji] = useState(false);
   const [recording, setRecording] = useState(false);
 
@@ -30,7 +28,7 @@ export default function GroupMessageInput({
   const audioChunksRef = useRef<Blob[]>([]);
 
   const handleTyping = () => {
-    if (!socket || !meId || !receiverId) return;
+    if (!socket || !meId || !groupId) return;
     if (socket.readyState !== WebSocket.OPEN) return;
     if (typingCooldownRef.current) return;
 
@@ -38,9 +36,9 @@ export default function GroupMessageInput({
 
     socket.send(
       JSON.stringify({
-        type: "typing",
+        type: "group_typing",
         senderId: meId,
-        receiverId,
+        groupId,
       })
     );
 
@@ -56,10 +54,8 @@ export default function GroupMessageInput({
       });
 
       const mediaRecorder = new MediaRecorder(stream);
-
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
@@ -71,9 +67,7 @@ export default function GroupMessageInput({
           const audioBlob = new Blob(audioChunksRef.current, {
             type: "audio/webm",
           });
-
           const formData = new FormData();
-
           formData.append("file", audioBlob, "voice.webm");
 
           // Upload API
@@ -86,7 +80,7 @@ export default function GroupMessageInput({
             JSON.stringify({
               type: "audio",
               senderId: meId,
-              receiverId,
+              groupId,
               // audio: res.data.audioUrl,
             })
           );

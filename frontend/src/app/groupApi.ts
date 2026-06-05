@@ -30,6 +30,14 @@ export interface Group {
     groupImage: string;
 }
 
+export interface GroupMessage {
+    _id: string;
+    senderId: string;
+    groupId: string;
+    message: string;
+    createdAt: string;
+}
+
 export const groupApis = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
         //Upload image
@@ -92,10 +100,18 @@ export const groupApis = apiSlice.injectEndpoints({
         //get group members
         getGroups: builder.query<Group[], string>({
             query: (userId) => ({
-                url: `/api/group/${userId}`,
+                url: `/api/group/user/${userId}`,
                 method: "GET",
             }),
             providesTags: ["Groups"],
+        }),
+
+        // Get Group Message
+        getGroupMessage: builder.query<GroupMessage[],{ groupId: string;}>({
+            query: ({groupId}) => ({
+                url: `/api/group/messages/${groupId}`,
+                method:"GET",
+            }),
         }),
     }),
 });
@@ -106,4 +122,5 @@ export const {
     useUploadVideoMutation,
     useCreateGroupMutation,
     useGetGroupsQuery,
+    useGetGroupMessageQuery,
 } = groupApis;

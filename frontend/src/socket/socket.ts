@@ -36,31 +36,32 @@ export const getSocket = (userId: string) => {
 export const getGroupSocket = (groupId: string) => {
   const key = `group_${groupId}`;
 
-  if (sockets[key]?.readyState === WebSocket.OPEN) {
-    return sockets[key];
+  const existing = sockets[key];
+
+  if (existing && existing.readyState !== WebSocket.CLOSED) {
+    return existing;
   }
 
-  if (sockets[key]?.readyState === WebSocket.CONNECTING) {
-    return sockets[key];
-  }
-
-  sockets[key] = new WebSocket(
+  const socket = new WebSocket(
     `ws://127.0.0.1:8000/ws/group/${groupId}`
   );
 
-  sockets[key].onopen = () => {
-    console.log("Group socket connected:", groupId);
+  sockets[key] = socket;
+
+  socket.onopen = () => {
+    console.log(" Group socket OPEN:", groupId);
   };
 
-  sockets[key].onclose = () => {
-    console.log(" Group socket closed:", groupId);
+  socket.onerror = (e) => {
+    console.log(" Socket error:", e);
   };
 
-  sockets[key].onerror = (err) => {
-    console.log(" Group socket error:", err);
+  socket.onclose = () => {
+    console.log(" Socket closed:", groupId);
+    delete sockets[key];
   };
 
-  return sockets[key];
+  return socket;
 };
 
 export const sendSocketMessage = (
