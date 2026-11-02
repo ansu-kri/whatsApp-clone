@@ -5,8 +5,9 @@ import type { ChatMessage } from "./types";
 export interface Group {
   id: string;
   name: string;
-  members: string[];
+  members: { id: string; name: string; avatar?: string }[];
   groupImage?: string;
+  createdBy?: string;
   avatar?: string;
   messages?: ChatMessage[];
 }

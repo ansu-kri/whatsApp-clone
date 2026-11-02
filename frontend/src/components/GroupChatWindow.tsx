@@ -3,14 +3,22 @@ import type { Group } from "../components/Sidebar";
 import ChatHeader from "./ChatHeader";
 import GroupMessageBubble from "./GroupMessageBubble";
 import GroupMessageInput from "./GroupMessageInput";
-import type { GroupMessage } from "./types";
-import { useGetGroupMessageQuery } from "@/app/groupApi";
+import type { ChatUser, GroupMessage } from "./types";
+import {
+  useAddGroupMembersMutation,
+  useGetGroupMessageQuery,
+  useRemoveGroupMemberMutation,
+} from "@/app/groupApi";
 import { skipToken } from "@reduxjs/toolkit/query";
 import { getGroupSocket, sendSocketMessage } from "@/socket/socket";
+import { useGetMeQuery } from "@/app/userApi";
+import toast from "react-hot-toast";
 
 type Props = {
   group: Group;
+  users: ChatUser[];
   onBack: () => void;
+  onGroupUpdated: (group: Group) => void;
   setRecentMessages: React.Dispatch<
     React.SetStateAction<Record<string, string>>
   >;
@@ -18,36 +26,42 @@ type Props = {
 
 export default function GroupChatWindow({
   group,
+  users,
   onBack,
+  onGroupUpdated,
   setRecentMessages,
 }: Props) {
-  const currentUserId = localStorage.getItem("userId") || "";
+  const { data: me } = useGetMeQuery();
+  const currentUserId = me?.id || "";
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<GroupMessage[]>([]);
-  const [typingUser] = useState("");
+  const [typingUser, setTypingUser] = useState("");
+  const [memberToAdd, setMemberToAdd] = useState("");
 
   const socketRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // ================= LOAD MESSAGES =================
+  const [addMembers, { isLoading: addingMembers }] =
+    useAddGroupMembersMutation();
+  const [removeMember, { isLoading: removingMember }] =
+    useRemoveGroupMemberMutation();
 
   const { data: groupMessages = [] } = useGetGroupMessageQuery(
     group?.id ? { groupId: group.id } : skipToken
   );
 
   useEffect(() => {
-    if (!groupMessages.length) return;
-
     const normalized: GroupMessage[] = groupMessages.map((m: any) => ({
-      id: m.id,
+      id: m.id || m._id,
       senderId: m.senderId,
+      senderName: m.senderName,
       groupId: m.groupId,
       message: m.message,
       createdAt: m.createdAt,
       status: m.status || "sent",
       edited: m.edited || false,
-      deleted: m.deleted || false,  
+      deleted: m.deleted || false,
     }));
 
     setMessages(normalized);
@@ -64,34 +78,68 @@ export default function GroupChatWindow({
     }
   }, [groupMessages, group.id, setRecentMessages]);
 
-  // ================= SOCKET INIT =================
-
   useEffect(() => {
-  if (!group?.id || !currentUserId) return;
+    if (!group?.id || !currentUserId) return;
 
-  const socket = getGroupSocket(group.id);
-  socketRef.current = socket;
+    const socket = getGroupSocket(group.id, currentUserId);
+    socketRef.current = socket;
 
-  const handleOpen = () => {
-    console.log("Socket ready for group:", group.id);
-  };
+    const handleOpen = () => {
+      console.log("Socket ready for group:", group.id);
+    };
 
-  socket.addEventListener("open", handleOpen);
+    const handleMessage = (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
 
-  socket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+      if (data.type === "group_typing") {
+        if (data.senderId !== currentUserId) {
+          const member = group.members?.find(
+            (item: any) => item.id === data.senderId
+          );
+          setTypingUser(member?.name || "Someone");
+          setTimeout(() => setTypingUser(""), 1500);
+        }
+        return;
+      }
 
-    if (data.type === "group_message") {
-      setMessages((prev) => [...prev, data.data]);
-    }
-  };
+      if (data.type === "group_message") {
+        const incoming = data.data || {};
+        const normalized: GroupMessage = {
+          id: incoming.id,
+          senderId: incoming.senderId,
+          senderName: incoming.senderName,
+          groupId: incoming.groupId || incoming.roomId || group.id,
+          message: incoming.message,
+          createdAt: incoming.createdAt,
+          status: incoming.status || "sent",
+          edited: incoming.edited || false,
+          deleted: incoming.deleted || false,
+        };
 
-  return () => {
-    socket.removeEventListener("open", handleOpen);
-  };
-}, [group.id, currentUserId]);
+        setMessages((prev) => {
+          if (prev.some((msg) => msg.id === normalized.id)) {
+            return prev;
+          }
+          return [...prev, normalized];
+        });
 
-  // ================= AUTO SCROLL =================
+        setRecentMessages((prev) => ({
+          ...prev,
+          [group.id]: normalized.deleted
+            ? "This message was deleted"
+            : normalized.message,
+        }));
+      }
+    };
+
+    socket.addEventListener("open", handleOpen);
+    socket.addEventListener("message", handleMessage);
+
+    return () => {
+      socket.removeEventListener("open", handleOpen);
+      socket.removeEventListener("message", handleMessage);
+    };
+  }, [group.id, currentUserId, group.members, setRecentMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -99,38 +147,73 @@ export default function GroupChatWindow({
     });
   }, [messages]);
 
-  // ================= SEND MESSAGE =================
+  const sendMessage = () => {
+    if (!message.trim() || !currentUserId) return;
 
-const sendMessage = () => {
-  if (!message.trim()) return;
+    const success = sendSocketMessage(
+      {
+        type: "group_message",
+        groupId: group.id,
+        senderId: currentUserId,
+        message: message.trim(),
+      },
+      "group",
+      group.id
+    );
 
-  const success = sendSocketMessage(
-    {
-      type: "group_message",
-      groupId: group.id,
-      senderId: currentUserId,
-      message,
-      createdAt: new Date().toISOString(),
-    },
-    "group",
-    group.id
+    if (!success) {
+      toast.error("Group chat is still connecting. Try again in a moment.");
+      return;
+    }
+
+    setMessage("");
+  };
+
+  const availableUsers = users.filter(
+    (user) => !group.members?.some((member: any) => member.id === user.id)
   );
 
-  if (!success) {
-    console.log("Group socket not ready OR still connecting");
-    return;
-  }
+  const handleAddMember = async () => {
+    if (!memberToAdd) return;
 
-  setMessage("");
-};
+    try {
+      const updated = await addMembers({
+        groupId: group.id,
+        memberIds: [memberToAdd],
+      }).unwrap();
+      onGroupUpdated(updated);
+      setMemberToAdd("");
+      toast.success("Member added");
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Failed to add member");
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    try {
+      const updated = await removeMember({
+        groupId: group.id,
+        memberId,
+      }).unwrap();
+      onGroupUpdated(updated);
+      toast.success(
+        memberId === currentUserId ? "You left the group" : "Member removed"
+      );
+      if (memberId === currentUserId) {
+        onBack();
+      }
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Failed to remove member");
+    }
+  };
+
+  const isCreator = group.createdBy === currentUserId;
 
   return (
     <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814]">
-      {/* HEADER */}
       <ChatHeader type="group" group={group} onBack={onBack} />
 
-      {/* MEMBERS */}
-      <div className="px-4 py-3">
+      <div className="px-4 py-3 border-b border-white/5">
         <h3 className="text-sm text-gray-400 mb-2 text-center">
           Members
         </h3>
@@ -142,20 +225,60 @@ const sendMessage = () => {
               className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg"
             >
               <img
-                src={member.avatar}
+                src={
+                  member.avatar ||
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    member.name || "User"
+                  )}`
+                }
                 alt={member.name}
                 className="w-8 h-8 rounded-full object-cover"
               />
 
               <span className="text-white text-sm">
                 {member.name}
+                {member.id === group.createdBy ? " (admin)" : ""}
               </span>
+
+              {(isCreator && member.id !== currentUserId) ||
+              member.id === currentUserId ? (
+                <button
+                  disabled={removingMember}
+                  onClick={() => handleRemoveMember(member.id)}
+                  className="text-xs text-red-400 hover:text-red-300"
+                >
+                  {member.id === currentUserId ? "Leave" : "Remove"}
+                </button>
+              ) : null}
             </div>
           ))}
         </div>
+
+        {isCreator && availableUsers.length > 0 && (
+          <div className="mt-3 flex justify-center gap-2">
+            <select
+              value={memberToAdd}
+              onChange={(e) => setMemberToAdd(e.target.value)}
+              className="bg-[#241d34] text-white text-sm rounded-lg px-3 py-2 border border-white/10"
+            >
+              <option value="">Add a member</option>
+              {availableUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddMember}
+              disabled={!memberToAdd || addingMembers}
+              className="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* CHAT AREA */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-3">
           {messages.length ? (
@@ -189,7 +312,6 @@ const sendMessage = () => {
         </div>
       </div>
 
-      {/* INPUT */}
       <div className="sticky bottom-0 px-4 md:px-8 py-4">
         <GroupMessageInput
           message={message}

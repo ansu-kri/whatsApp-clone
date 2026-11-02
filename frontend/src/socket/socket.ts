@@ -33,7 +33,7 @@ export const getSocket = (userId: string) => {
   return sockets[key];
 };
 
-export const getGroupSocket = (groupId: string) => {
+export const getGroupSocket = (groupId: string, userId?: string) => {
   const key = `group_${groupId}`;
 
   const existing = sockets[key];
@@ -42,8 +42,9 @@ export const getGroupSocket = (groupId: string) => {
     return existing;
   }
 
+  const memberId = userId || currentUserId || "";
   const socket = new WebSocket(
-    `ws://127.0.0.1:8000/ws/group/${groupId}`
+    `ws://127.0.0.1:8000/ws/group/${groupId}?userId=${memberId}`
   );
 
   sockets[key] = socket;

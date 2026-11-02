@@ -26,7 +26,7 @@ function Login() {
         setCredentials({
           token: res.access_token,
           user: {
-            userId: "",
+            userId: res.user?.id || "",
             email,
           },
         })

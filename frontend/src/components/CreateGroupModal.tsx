@@ -3,6 +3,7 @@ import { X, Users } from "lucide-react";
 import { useCreateGroupMutation, useUploadImageMutation } from "@/app/groupApi";
 import toast from "react-hot-toast";
 import { useSelector } from "react-redux";
+import { useGetMeQuery } from "@/app/userApi";
 
 type User = {
   id: string;
@@ -25,59 +26,74 @@ export default function CreateGroupModal({
   const [groupImage, setGroupImage] = useState<File | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [createGroup, { isLoading }] = useCreateGroupMutation();
-  const [uploadImage] = useUploadImageMutation();
-  const userId = useSelector((state: any) => state.auth.user?.userId)
+  const [uploadImage, { isLoading: isUploading }] = useUploadImageMutation();
+  const { data: me } = useGetMeQuery();
+  const authUserId = useSelector((state: any) => state.auth.user?.userId);
+  const currentUserId = me?.id || authUserId;
 
   if (!isOpen) return null;
 
-  const toggleMember = (userId: string) => {
+  const toggleMember = (id: string) => {
     setSelectedMembers((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
+      prev.includes(id)
+        ? prev.filter((memberId) => memberId !== id)
+        : [...prev, id]
     );
   };
 
-const handleCreate = async () => {
-  try {
-    let imageUrl = "";
-
-    if (groupImage) {
-      const imageResponse = await uploadImage(groupImage).unwrap();
-      imageUrl = imageResponse.imageUrl;
+  const handleCreate = async () => {
+    if (!groupName.trim()) {
+      toast.error("Please enter a group name");
+      return;
     }
 
-    const response = await createGroup({
-      name: groupName,
-      members: selectedMembers,
-      groupImage: imageUrl,
-      createdBy: userId,
-    }).unwrap();
+    if (selectedMembers.length === 0) {
+      toast.error("Please select at least one member");
+      return;
+    }
 
-    toast.success("Group created successfully");
+    if (!currentUserId) {
+      toast.error("You must be logged in to create a group");
+      return;
+    }
 
-    console.log(response);
+    try {
+      let imageUrl = "";
 
-    setGroupName("");
-    setGroupImage(null);
-    setSelectedMembers([]);
+      if (groupImage) {
+        const imageResponse = await uploadImage(groupImage).unwrap();
+        imageUrl = imageResponse.imageUrl;
+      }
 
-    onClose();
-  } catch (error: any) {
-    console.error(error);
+      await createGroup({
+        name: groupName.trim(),
+        members: selectedMembers,
+        groupImage: imageUrl,
+        createdBy: currentUserId,
+      }).unwrap();
 
-    toast.error(
-      error?.data?.detail ||
-      "Failed to create group"
-    );
-  }
-};
+      toast.success("Group created successfully");
+
+      setGroupName("");
+      setGroupImage(null);
+      setSelectedMembers([]);
+
+      onClose();
+    } catch (error: any) {
+      console.error(error);
+
+      const detail = error?.data?.detail;
+      toast.error(
+        typeof detail === "string"
+          ? detail
+          : "Failed to create group"
+      );
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="w-full max-w-md bg-[#181424] rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-
-        {/* HEADER */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <Users className="text-purple-400" size={20} />
@@ -94,10 +110,7 @@ const handleCreate = async () => {
           </button>
         </div>
 
-        {/* BODY */}
         <div className="p-6 space-y-5">
-
-          {/* GROUP NAME */}
           <div>
             <label className="text-sm text-gray-400 block mb-2">
               Group Name
@@ -112,7 +125,6 @@ const handleCreate = async () => {
             />
           </div>
 
-          {/* GROUP IMAGE */}
           <div>
             <label className="text-sm text-gray-400 block mb-2">
               Group Image
@@ -128,14 +140,15 @@ const handleCreate = async () => {
             />
           </div>
 
-          {/* MEMBERS */}
           <div>
             <label className="text-sm text-gray-400 block mb-3">
               Select Members
             </label>
 
             <div className="max-h-56 overflow-y-auto space-y-2">
-              {users.map((user) => (
+              {users
+                .filter((user) => user.id !== currentUserId)
+                .map((user) => (
                 <button
                   key={user.id}
                   type="button"
@@ -161,17 +174,17 @@ const handleCreate = async () => {
             </div>
           </div>
 
-          {/* CREATE BUTTON */}
           <button
             onClick={handleCreate}
             disabled={
               isLoading ||
+              isUploading ||
               !groupName.trim() ||
               selectedMembers.length === 0
             }
             className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition"
           >
-            {isLoading ? "Creating..." : "craete Group"}
+            {isLoading || isUploading ? "Creating..." : "Create Group"}
           </button>
         </div>
       </div>

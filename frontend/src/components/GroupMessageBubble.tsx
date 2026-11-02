@@ -71,7 +71,12 @@ export default function GroupMessageBubble({
           </div>
         )}
 
-        {/* Message Content */}
+        {!isMe && "senderName" in message && message.senderName && (
+          <p className="text-[11px] font-semibold text-purple-600 mb-1">
+            {message.senderName}
+          </p>
+        )}
+
         <p className="text-sm whitespace-pre-wrap">
           {message.deleted ? (
             <span className="italic text-gray-400">

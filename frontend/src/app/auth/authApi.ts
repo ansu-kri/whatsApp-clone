@@ -16,6 +16,11 @@ export interface LoginRequest {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
+  user?: {
+    id: string;
+    name?: string;
+    createdAt?: string | null;
+  };
 }
 
 export const authApis = apiSlice.injectEndpoints({

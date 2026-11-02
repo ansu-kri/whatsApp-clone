@@ -4,14 +4,6 @@ export interface UploadImageResponse {
     imageUrl: string;
 }
 
-export interface UploadAudioResponse {
-    audioUrl: string;
-}
-
-export interface UploadVideoResponse {
-    videoUrl: string;
-}
-
 export interface CreateGroupRequest {
     name: string;
     members: string[];
@@ -19,72 +11,54 @@ export interface CreateGroupRequest {
     createdBy: string;
 }
 
-export interface CreateGroupResponse {
-    groupId: string;
+export interface GroupMember {
+    id: string;
+    name: string;
+    avatar?: string;
 }
 
 export interface Group {
     id: string;
     name: string;
-    members: string[],
-    groupImage: string;
+    members: GroupMember[];
+    groupImage?: string;
+    createdBy?: string;
+}
+
+export interface CreateGroupResponse {
+    groupId: string;
+    group: Group;
 }
 
 export interface GroupMessage {
-    _id: string;
+    id: string;
     senderId: string;
+    senderName?: string;
     groupId: string;
     message: string;
     createdAt: string;
+    edited?: boolean;
+    deleted?: boolean;
+    status?: string;
 }
 
 export const groupApis = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
-        //Upload image
         uploadImage: builder.mutation<UploadImageResponse, File>({
             query: (file) => {
                 const formData = new FormData();
                 formData.append("file", file);
 
                 return {
-                    url: "/image",
+                    url: "/api/upload/image",
                     method: "POST",
                     body: formData,
                 };
             },
         }),
 
-        //Upload Audio
-        uploadAudio: builder.mutation<UploadAudioResponse, File>({
-            query: (file) => {
-                const formData = new FormData();
-                formData.append("file", file);
-
-                return {
-                    url: "/audio",
-                    method: "POST",
-                    body: formData,
-                };
-            },
-        }),
-
-        //Upload video
-        uploadVideo: builder.mutation<UploadVideoResponse, File>({
-            query: (file) => {
-                const formData = new FormData();
-                formData.append("file", file);
-
-                return {
-                    url: "/video",
-                    method: "POST",
-                    body: formData,
-                };
-            },
-        }),
-
-        // create group
         createGroup: builder.mutation<CreateGroupResponse, CreateGroupRequest>({
-            query: ({ name, members, groupImage, createdBy, }) => ({
+            query: ({ name, members, groupImage, createdBy }) => ({
                 url: `/api/group/create`,
                 method: "POST",
                 body: {
@@ -96,8 +70,7 @@ export const groupApis = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ["Groups"],
         }),
-        
-        //get group members
+
         getGroups: builder.query<Group[], string>({
             query: (userId) => ({
                 url: `/api/group/user/${userId}`,
@@ -106,21 +79,46 @@ export const groupApis = apiSlice.injectEndpoints({
             providesTags: ["Groups"],
         }),
 
-        // Get Group Message
-        getGroupMessage: builder.query<GroupMessage[],{ groupId: string;}>({
-            query: ({groupId}) => ({
+        getGroupMessage: builder.query<GroupMessage[], { groupId: string }>({
+            query: ({ groupId }) => ({
                 url: `/api/group/messages/${groupId}`,
-                method:"GET",
+                method: "GET",
             }),
+            providesTags: (_result, _error, arg) => [
+                { type: "Groups", id: `messages-${arg.groupId}` },
+            ],
+        }),
+
+        addGroupMembers: builder.mutation<
+            Group,
+            { groupId: string; memberIds: string[] }
+        >({
+            query: ({ groupId, memberIds }) => ({
+                url: `/api/group/${groupId}/members`,
+                method: "POST",
+                body: { memberIds },
+            }),
+            invalidatesTags: ["Groups"],
+        }),
+
+        removeGroupMember: builder.mutation<
+            Group,
+            { groupId: string; memberId: string }
+        >({
+            query: ({ groupId, memberId }) => ({
+                url: `/api/group/${groupId}/members/${memberId}`,
+                method: "DELETE",
+            }),
+            invalidatesTags: ["Groups"],
         }),
     }),
 });
 
 export const {
     useUploadImageMutation,
-    useUploadAudioMutation,
-    useUploadVideoMutation,
     useCreateGroupMutation,
     useGetGroupsQuery,
     useGetGroupMessageQuery,
+    useAddGroupMembersMutation,
+    useRemoveGroupMemberMutation,
 } = groupApis;

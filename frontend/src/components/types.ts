@@ -24,17 +24,26 @@ export type ChatUser = {
   lastSeen?: string;
 };
 
-export interface Group {
-  _id: string;
+export interface GroupMember {
+  id: string;
   name: string;
   avatar?: string;
-  members: any[];
-  messages: ChatMessage[];
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  avatar?: string;
+  groupImage?: string;
+  createdBy?: string;
+  members: GroupMember[];
+  messages?: ChatMessage[];
 }
 
 export interface GroupMessage {
   id: string;
   senderId: string;
+  senderName?: string;
   groupId: string;
   message: string;
   createdAt: string;

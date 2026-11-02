@@ -67,10 +67,23 @@ export default function Chat() {
           groups={groups}
           selectedUser={selectedUser}
           selectedGroup={selectedGroup}
-          onSelectUser={setSelectedUser}
-          onSelectGroup={setSelectedGroup}
+          onSelectUser={(user) => {
+            setSelectedGroup(null);
+            setSelectedUser(user);
+          }}
+          onSelectGroup={(group) => {
+            setSelectedUser(null);
+            setSelectedGroup(group);
+          }}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            if (tab === "chats") {
+              setSelectedGroup(null);
+            } else {
+              setSelectedUser(null);
+            }
+          }}
           onCreateGroup={() => setIsCreateGroupOpen(true)}
         />
       </div>
@@ -87,7 +100,9 @@ export default function Chat() {
         ) : selectedGroup ? (
           <GroupChatWindow
             group={selectedGroup}
+            users={users}
             onBack={() => setSelectedGroup(null)}
+            onGroupUpdated={(updated) => setSelectedGroup(updated)}
             setRecentMessages={setRecentMessages}
           />
         ) : (
