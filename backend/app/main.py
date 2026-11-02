@@ -325,51 +325,101 @@ async def websocket_endpoint(websocket: WebSocket):
 async def websocket_group(
     websocket: WebSocket, room_id: str
 ):
-    await manager.connect_room(
-        room_id,
-        websocket
-    )
+    user_id = websocket.query_params.get("userId")
+
+    if not user_id:
+        await websocket.close(code=1008)
+        return
+
+    try:
+        group = await db.groups.find_one({"_id": ObjectId(room_id)})
+    except Exception:
+        await websocket.close(code=1008)
+        return
+
+    if not group or user_id not in group.get("members", []):
+        await websocket.close(code=1008)
+        return
+
+    await manager.connect_room(room_id, websocket)
 
     try:
         while True:
-
             data = await websocket.receive_text()
-            parsed = json.loads(data)
-            sender_id = parsed.get("senderId")
-            message = parsed.get("message")
+            try:
+                parsed = json.loads(data)
+            except json.JSONDecodeError:
+                continue
 
+            event = parsed.get("type")
+            sender_id = parsed.get("senderId") or user_id
+
+            if sender_id != user_id:
+                continue
+
+            fresh_group = await db.groups.find_one({"_id": ObjectId(room_id)})
+            if not fresh_group or user_id not in fresh_group.get("members", []):
+                await websocket.close(code=1008)
+                break
+
+            if event == "group_typing":
+                typing_payload = json.dumps({
+                    "type": "group_typing",
+                    "groupId": room_id,
+                    "senderId": sender_id,
+                })
+                await manager.broadcast_room(room_id, typing_payload)
+                continue
+
+            if event not in ("group_message", "message"):
+                continue
+
+            message = (parsed.get("message") or "").strip()
             if not message:
                 continue
 
-            #save message
+            sender = await db.users.find_one({"_id": ObjectId(sender_id)})
+            now = datetime.now(timezone.utc)
             message_doc = {
-                "roomId": room_id,
+                "groupId": room_id,
                 "senderId": sender_id,
+                "senderName": sender.get("name", "") if sender else "",
                 "message": message,
-                "createdAt": datetime.utcnow()
+                "createdAt": now,
+                "edited": False,
+                "deleted": False,
+                "status": "sent",
             }
 
-            result = await db.group_messages.insert_one(
-                message_doc
-            )
+            result = await db.group_messages.insert_one(message_doc)
+
             payload = json.dumps({
                 "type": "group_message",
-                "roomId": room_id,
+                "groupId": room_id,
                 "data": {
                     "id": str(result.inserted_id),
-                    **message_doc,
-                    "createdAt": message_doc["createdAt"].isoformat()
+                    "groupId": room_id,
+                    "senderId": sender_id,
+                    "senderName": message_doc["senderName"],
+                    "message": message,
+                    "createdAt": now.isoformat().replace("+00:00", "Z"),
+                    "edited": False,
+                    "deleted": False,
+                    "status": "sent",
                 }
             })
-            await manager.broadcast_room(
-                room_id,
-                payload
-            )
+
+            await manager.broadcast_room(room_id, payload)
+
+            member_ids = fresh_group.get("members", [])
+            for member_id in member_ids:
+                if member_id != sender_id:
+                    await manager.send_personal_message(member_id, payload)
+
     except WebSocketDisconnect:
         print("Group disconnected")
-    
-    finally:
 
+    finally:
         manager.disconnect_room(room_id, websocket)
 
 

@@ -47,7 +47,7 @@ export default function GroupChatWindow({
       createdAt: m.createdAt,
       status: m.status || "sent",
       edited: m.edited || false,
-      deleted: m.deleted || false,
+      deleted: m.deleted || false,  
     }));
 
     setMessages(normalized);
