@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ImagePlus, X, Users } from "lucide-react";
 import { useCreateGroupMutation, useUploadImageMutation } from "@/app/groupApi";
 import toast from "react-hot-toast";
 import { useSelector } from "react-redux";
@@ -24,12 +24,23 @@ export default function CreateGroupModal({
 }: Props) {
   const [groupName, setGroupName] = useState("");
   const [groupImage, setGroupImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [createGroup, { isLoading }] = useCreateGroupMutation();
   const [uploadImage, { isLoading: isUploading }] = useUploadImageMutation();
   const { data: me } = useGetMeQuery();
   const authUserId = useSelector((state: any) => state.auth.user?.userId);
   const currentUserId = me?.id || authUserId;
+
+  useEffect(() => {
+    if (!groupImage) {
+      setImagePreview("");
+      return;
+    }
+    const previewUrl = URL.createObjectURL(groupImage);
+    setImagePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [groupImage]);
 
   if (!isOpen) return null;
 
@@ -47,6 +58,17 @@ export default function CreateGroupModal({
       return;
     }
 
+    if (groupImage) {
+      if (!["image/png", "image/jpeg", "image/webp"].includes(groupImage.type)) {
+        toast.error("Choose a PNG, JPG, JPEG, or WEBP image");
+        return;
+      }
+      if (groupImage.size > 5 * 1024 * 1024) {
+        toast.error("Group images must be 5 MB or smaller");
+        return;
+      }
+    }
+
     if (selectedMembers.length === 0) {
       toast.error("Please select at least one member");
       return;
@@ -62,7 +84,7 @@ export default function CreateGroupModal({
 
       if (groupImage) {
         const imageResponse = await uploadImage(groupImage).unwrap();
-        imageUrl = imageResponse.imageUrl;
+        imageUrl = imageResponse.mediaUrl;
       }
 
       await createGroup({
@@ -132,12 +154,30 @@ export default function CreateGroupModal({
 
             <input
               type="file"
-              accept="image/*"
-              onChange={(e) =>
-                setGroupImage(e.target.files?.[0] || null)
-              }
+              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                if (file && !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+                  toast.error("Choose a PNG, JPG, JPEG, or WEBP image");
+                  e.target.value = "";
+                  setGroupImage(null);
+                  return;
+                }
+                if (file && file.size > 5 * 1024 * 1024) {
+                  toast.error("Group images must be 5 MB or smaller");
+                  e.target.value = "";
+                  setGroupImage(null);
+                  return;
+                }
+                setGroupImage(file);
+              }}
               className="w-full text-sm text-gray-400"
             />
+            {imagePreview ? (
+              <img src={imagePreview} alt="Group image preview" className="mt-3 h-20 w-20 rounded-full border border-white/10 object-cover" />
+            ) : (
+              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-full bg-[#241d34] text-purple-300"><ImagePlus size={24} /></div>
+            )}
           </div>
 
           <div>
@@ -184,7 +224,7 @@ export default function CreateGroupModal({
             }
             className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition"
           >
-            {isLoading || isUploading ? "Creating..." : "Create Group"}
+            {isUploading ? "Uploading image..." : isLoading ? "Creating..." : "Create Group"}
           </button>
         </div>
       </div>

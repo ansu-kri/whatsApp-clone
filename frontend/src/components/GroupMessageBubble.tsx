@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChatMessage, GroupMessage } from "./types";
+import MediaAttachment from "./MediaAttachment";
 
 type Props = {
   message?: ChatMessage | GroupMessage;
@@ -25,11 +26,7 @@ export default function GroupMessageBubble({
   const messageId = message.id;
 
   return (
-    <div
-      className={`w-full flex ${
-        isMe ? "justify-end" : "justify-start"
-      }`}
-    >
+    <div className={`w-full flex ${isMe ? "justify-end" : "justify-start"}`}>
       <div
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
@@ -39,8 +36,8 @@ export default function GroupMessageBubble({
             message.deleted
               ? "bg-gray-100 text-gray-400 italic"
               : isMe
-              ? "bg-green-100 text-black rounded-br-md"
-              : "bg-white text-gray-800 rounded-bl-md border border-gray-100"
+                ? "bg-green-100 text-black rounded-br-md"
+                : "bg-white text-gray-800 rounded-bl-md border border-gray-100"
           }
         `}
       >
@@ -87,6 +84,15 @@ export default function GroupMessageBubble({
           )}
         </p>
 
+        {!message.deleted && message.attachmentUrl && (
+          <MediaAttachment
+            url={message.attachmentUrl}
+            mediaType={message.mediaType}
+            fileName={message.fileName}
+            voiceMessage={message.voiceMessage}
+            durationSeconds={message.durationSeconds}
+          />
+        )}
         {/* Footer */}
         <div className="text-[11px] text-gray-500 mt-1 flex justify-end items-center gap-1">
           {message.edited && !message.deleted && (
@@ -106,9 +112,7 @@ export default function GroupMessageBubble({
           {isMe && (
             <span
               className={
-                message.status === "seen"
-                  ? "text-blue-500"
-                  : "text-gray-400"
+                message.status === "seen" ? "text-blue-500" : "text-gray-400"
               }
             >
               {message.status === "sent" && "✓"}

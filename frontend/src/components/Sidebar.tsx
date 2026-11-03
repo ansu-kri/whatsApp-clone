@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ChatUser } from "./types";
 import { MessageSquare, Plus, Users } from "lucide-react";
+import GroupAvatar from "./GroupAvatar";
 import type { ChatMessage } from "./types";
 export interface Group {
   id: string;
@@ -176,14 +177,9 @@ export default function Sidebar({
                     : "border-transparent hover:bg-[#191325]"
                 }`}
               >
-                <img
-                  src={
-                    group.groupImage ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                      group.name
-                    )}`
-                  }
-                  alt={group.name}
+                <GroupAvatar
+                  name={group.name}
+                  imageUrl={group.groupImage}
                   className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
                 />
                 <div className="flex-1 text-left">

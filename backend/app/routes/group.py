@@ -115,6 +115,11 @@ def _serialize_group_message(msg: dict) -> dict:
         "senderName": msg.get("senderName", ""),
         "groupId": group_id,
         "message": msg.get("message", ""),
+        "attachmentUrl": msg.get("attachmentUrl"),
+        "mediaType": msg.get("mediaType"),
+        "fileName": msg.get("fileName"),
+        "voiceMessage": msg.get("voiceMessage", False),
+        "durationSeconds": msg.get("durationSeconds"),
         "createdAt": (
             created_at.isoformat().replace("+00:00", "Z")
             if created_at

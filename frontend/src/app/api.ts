@@ -6,11 +6,11 @@ import type {
 } from "@reduxjs/toolkit/query";
 import { clearCredentials } from "./auth/authSlice";
 
-const BASE_URL = "http://127.0.0.1:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 // ✅ baseQuery with JWT injection
 const baseQuery = fetchBaseQuery({
-  baseUrl: BASE_URL,
+  baseUrl: API_BASE_URL,
   prepareHeaders: (headers) => {
     const token = localStorage.getItem("token");
 

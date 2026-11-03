@@ -1,7 +1,9 @@
 import apiSlice from "./api";
 
 export interface UploadImageResponse {
-    imageUrl: string;
+    mediaUrl: string;
+    mediaType: string;
+    fileName: string;
 }
 
 export interface CreateGroupRequest {
@@ -50,7 +52,7 @@ export const groupApis = apiSlice.injectEndpoints({
                 formData.append("file", file);
 
                 return {
-                    url: "/api/upload/image",
+                    url: "/api/upload/?purpose=group-avatar",
                     method: "POST",
                     body: formData,
                 };

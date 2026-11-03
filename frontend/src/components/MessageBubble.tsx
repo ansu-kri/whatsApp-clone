@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChatMessage } from "./types";
+import MediaAttachment from "./MediaAttachment";
 
 type Props = {
   message: ChatMessage;
@@ -63,6 +64,15 @@ export default function MessageBubble({
             message.message
           )}
         </p>
+        {!message.deleted && message.attachmentUrl && (
+          <MediaAttachment
+            url={message.attachmentUrl}
+            mediaType={message.mediaType}
+            fileName={message.fileName}
+            voiceMessage={message.voiceMessage}
+            durationSeconds={message.durationSeconds}
+          />
+        )}
         {/* FOOTER */}
 
         <div className="text-[11px] text-gray-500 mt-1 flex justify-end gap-1 items-center">

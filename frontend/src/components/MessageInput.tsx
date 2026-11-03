@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import { uploadMedia } from "../app/uploadMedia";
+import VoiceMessageControls from "./VoiceMessageControls";
 // import API from "../app/api";
 
 type Props = {
@@ -23,11 +25,8 @@ export default function MessageInput({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [showEmoji, setShowEmoji] = useState(false);
-  const [recording, setRecording] = useState(false);
-
-  // FIXED TYPES
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState("");
 
   const handleTyping = () => {
     if (!socket || !meId || !receiverId) return;
@@ -41,7 +40,7 @@ export default function MessageInput({
         type: "typing",
         senderId: meId,
         receiverId,
-      })
+      }),
     );
 
     setTimeout(() => {
@@ -49,76 +48,58 @@ export default function MessageInput({
     }, 1500);
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-
-      const mediaRecorder = new MediaRecorder(stream);
-
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event: BlobEvent) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        try {
-          const audioBlob = new Blob(audioChunksRef.current, {
-            type: "audio/webm",
-          });
-
-          const formData = new FormData();
-
-          formData.append("file", audioBlob, "voice.webm");
-
-          // Upload API
-          // const res = await API.posts(
-          //   "/api/upload/audio",
-          //   formData
-          // );
-
-          socket?.send(
-            JSON.stringify({
-              type: "audio",
-              senderId: meId,
-              receiverId,
-              // audio: res.data.audioUrl,
-            })
-          );
-        } catch (err) {
-          console.error("Upload failed:", err);
-        }
-      };
-
-      mediaRecorder.start();
-      setRecording(true);
-    } catch (err) {
-      console.error("Mic permission denied:", err);
-    }
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
-  };
-
   const handleFilePick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-
+    e.target.value = "";
     if (!file) return;
-
-    console.log("Selected file:", file);
+    setUploadError("");
+    const allowed = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "video/mp4",
+      "video/webm",
+    ];
+    if (!allowed.includes(file.type)) {
+      setUploadError("Choose a JPEG, PNG, GIF, WebP, MP4, or WebM file.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setUploadError("Files must be 25 MB or smaller.");
+      return;
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setUploadError("Chat is reconnecting. Try again shortly.");
+      return;
+    }
+    try {
+      setUploadProgress(0);
+      const uploaded = await uploadMedia(file, setUploadProgress);
+      socket.send(
+        JSON.stringify({
+          type: "message",
+          senderId: meId,
+          receiverId,
+          message: "",
+          attachmentUrl: uploaded.mediaUrl,
+          mediaType: uploaded.mediaType,
+          fileName: uploaded.fileName,
+        }),
+      );
+      setUploadProgress(null);
+    } catch (error) {
+      setUploadProgress(null);
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : "Upload failed. Please try again.",
+      );
+    }
   };
 
   const addEmoji = (emoji: string) => {
@@ -128,16 +109,15 @@ export default function MessageInput({
   return (
     <div className="w-full px-2 sm:px-4">
       <div className="flex items-end gap-2 sm:gap-3 bg-white/80 backdrop-blur-xl border border-gray-200 shadow-lg rounded-2xl p-2 sm:p-3">
-        
         <input
           ref={fileInputRef}
           type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"
           className="hidden"
           onChange={handleFileChange}
         />
 
         <div className="flex items-center gap-1 sm:gap-2">
-          
           <button
             onClick={() => setShowEmoji(!showEmoji)}
             className="p-2 rounded-xl hover:bg-gray-100 active:scale-95 transition"
@@ -152,21 +132,13 @@ export default function MessageInput({
             📎
           </button>
 
-          {!recording ? (
-            <button
-              onClick={startRecording}
-              className="p-2 rounded-xl hover:bg-gray-100 active:scale-95 transition"
-            >
-              🎙
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="p-2 rounded-xl hover:bg-gray-100 active:scale-95 transition"
-            >
-              Stop
-            </button>
-          )}
+          <VoiceMessageControls
+            socket={socket}
+            meId={meId}
+            receiverId={receiverId}
+            message={message}
+            setMessage={setMessage}
+          />
         </div>
 
         <input
@@ -190,6 +162,17 @@ export default function MessageInput({
         </button>
       </div>
 
+      {uploadProgress !== null && (
+        <div className="mx-2 mt-2 text-sm text-gray-600" role="status">
+          Uploading media: {uploadProgress}%
+          <progress className="ml-2 w-40" max="100" value={uploadProgress} />
+        </div>
+      )}
+      {uploadError && (
+        <p className="mx-2 mt-2 text-sm text-red-600" role="alert">
+          {uploadError}
+        </p>
+      )}
       {showEmoji && (
         <div className="mt-2 flex gap-2 flex-wrap bg-white border rounded-xl p-2 shadow">
           {["😀", "😂", "😍", "😎", "😭", "👍", "🔥", "🎉"].map((e) => (

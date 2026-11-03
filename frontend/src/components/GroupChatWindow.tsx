@@ -48,7 +48,7 @@ export default function GroupChatWindow({
     useRemoveGroupMemberMutation();
 
   const { data: groupMessages = [] } = useGetGroupMessageQuery(
-    group?.id ? { groupId: group.id } : skipToken
+    group?.id ? { groupId: group.id } : skipToken,
   );
 
   useEffect(() => {
@@ -58,6 +58,11 @@ export default function GroupChatWindow({
       senderName: m.senderName,
       groupId: m.groupId,
       message: m.message,
+      attachmentUrl: m.attachmentUrl,
+      mediaType: m.mediaType,
+      fileName: m.fileName,
+      voiceMessage: m.voiceMessage,
+      durationSeconds: m.durationSeconds,
       createdAt: m.createdAt,
       status: m.status || "sent",
       edited: m.edited || false,
@@ -94,7 +99,7 @@ export default function GroupChatWindow({
       if (data.type === "group_typing") {
         if (data.senderId !== currentUserId) {
           const member = group.members?.find(
-            (item: any) => item.id === data.senderId
+            (item: any) => item.id === data.senderId,
           );
           setTypingUser(member?.name || "Someone");
           setTimeout(() => setTypingUser(""), 1500);
@@ -110,6 +115,11 @@ export default function GroupChatWindow({
           senderName: incoming.senderName,
           groupId: incoming.groupId || incoming.roomId || group.id,
           message: incoming.message,
+          attachmentUrl: incoming.attachmentUrl,
+          mediaType: incoming.mediaType,
+          fileName: incoming.fileName,
+          voiceMessage: incoming.voiceMessage,
+          durationSeconds: incoming.durationSeconds,
           createdAt: incoming.createdAt,
           status: incoming.status || "sent",
           edited: incoming.edited || false,
@@ -158,7 +168,7 @@ export default function GroupChatWindow({
         message: message.trim(),
       },
       "group",
-      group.id
+      group.id,
     );
 
     if (!success) {
@@ -170,7 +180,7 @@ export default function GroupChatWindow({
   };
 
   const availableUsers = users.filter(
-    (user) => !group.members?.some((member: any) => member.id === user.id)
+    (user) => !group.members?.some((member: any) => member.id === user.id),
   );
 
   const handleAddMember = async () => {
@@ -197,7 +207,7 @@ export default function GroupChatWindow({
       }).unwrap();
       onGroupUpdated(updated);
       toast.success(
-        memberId === currentUserId ? "You left the group" : "Member removed"
+        memberId === currentUserId ? "You left the group" : "Member removed",
       );
       if (memberId === currentUserId) {
         onBack();
@@ -214,9 +224,7 @@ export default function GroupChatWindow({
       <ChatHeader type="group" group={group} onBack={onBack} />
 
       <div className="px-4 py-3 border-b border-white/5">
-        <h3 className="text-sm text-gray-400 mb-2 text-center">
-          Members
-        </h3>
+        <h3 className="text-sm text-gray-400 mb-2 text-center">Members</h3>
 
         <div className="flex flex-wrap justify-center gap-3">
           {group.members?.map((member: any) => (
@@ -228,7 +236,7 @@ export default function GroupChatWindow({
                 src={
                   member.avatar ||
                   `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    member.name || "User"
+                    member.name || "User",
                   )}`
                 }
                 alt={member.name}
@@ -302,9 +310,7 @@ export default function GroupChatWindow({
               <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></span>
               <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-300"></span>
 
-              <p className="text-sm text-gray-500">
-                {typingUser} is typing...
-              </p>
+              <p className="text-sm text-gray-500">{typingUser} is typing...</p>
             </div>
           )}
 

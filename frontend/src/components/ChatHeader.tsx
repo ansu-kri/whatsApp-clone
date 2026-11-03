@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLogoutMutation } from "../app/auth/authApi";
 import { useNavigate } from "react-router-dom";
 import AccountModal from "./AccountModal";
+import GroupAvatar from "./GroupAvatar";
 import { useGetMeQuery } from "@/app/userApi";
 
 type GroupType = {
@@ -45,10 +46,6 @@ export default function ChatHeader({
 
   const displayName = type === "group" ? group?.name : user?.name;
 
-  const avatar =
-    type === "group"
-      ? group?.groupImage || `https://ui-avatars.com/api/?name=${group?.name}`
-      : user?.avatar;
 
   const subtitle =
     type === "group"
@@ -106,11 +103,19 @@ export default function ChatHeader({
           )}
 
           <div className="relative flex-shrink-0">
-            <img
-              src={avatar}
-              alt="avatar"
-              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-cyan-400 shadow-lg"
-            />
+            {type === "group" ? (
+              <GroupAvatar
+                name={group?.name || "Group"}
+                imageUrl={group?.groupImage}
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-cyan-400 shadow-lg"
+              />
+            ) : (
+              <img
+                src={user?.avatar}
+                alt="avatar"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-cyan-400 shadow-lg"
+              />
+            )}
 
             {type === "user" && isOnline && (
               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-[#0F172A] rounded-full"></span>
@@ -166,16 +171,38 @@ export default function ChatHeader({
       </div>
 
       {/* PROFILE MODAL (UNCHANGED) */}
-      <AccountModal
-        open={openProfile}
-        onClose={() => setOpenProfile(false)}
-        user={{
-          name: me?.name || "",
-          avatar: me?.avatar || user?.avatar || "",
-          email: me?.email || "",
-          createdAt: me?.createdAt || "",
-        }}
-      />
+      {type === "group" ? (
+        openProfile && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#181424] p-6 text-center shadow-2xl">
+              <GroupAvatar
+                name={group?.name || "Group"}
+                imageUrl={group?.groupImage}
+                className="mx-auto h-24 w-24 rounded-full border-2 border-cyan-400 object-cover"
+              />
+              <h2 className="mt-4 text-xl font-semibold text-white">{group?.name}</h2>
+              <p className="mt-1 text-sm text-gray-400">Group information ({group?.members?.length || 0} members)</p>
+              <div className="mt-4 max-h-48 space-y-2 overflow-y-auto text-left">
+                {group?.members?.map((member) => (
+                  <p key={member.id} className="rounded-lg bg-white/5 px-3 py-2 text-sm text-gray-200">{member.name}</p>
+                ))}
+              </div>
+              <button onClick={() => setOpenProfile(false)} className="mt-5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white">Close</button>
+            </div>
+          </div>
+        )
+      ) : (
+        <AccountModal
+          open={openProfile}
+          onClose={() => setOpenProfile(false)}
+          user={{
+            name: me?.name || "",
+            avatar: me?.avatar || user?.avatar || "",
+            email: me?.email || "",
+            createdAt: me?.createdAt || "",
+          }}
+        />
+      )}
     </>
   );
 }

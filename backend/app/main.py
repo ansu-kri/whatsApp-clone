@@ -251,9 +251,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 ).strip()
                 
                 image_url = parsed.get("image")
+                attachment_url = parsed.get("attachmentUrl")
+                media_type = parsed.get("mediaType")
+                file_name = parsed.get("fileName")
+                voice_message = bool(parsed.get("voiceMessage"))
+                raw_duration = parsed.get("durationSeconds")
+                duration_seconds = raw_duration if isinstance(raw_duration, (int, float)) and 0 <= raw_duration <= 3600 else None
                 
                 #prevent empty message
-                if not message_text and not image_url:
+                if not message_text and not image_url and not attachment_url:
                     continue
 
                 now = datetime.now(timezone.utc)    
@@ -265,6 +271,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     "receiverId": parsed["receiverId"],
                     "message": message_text,
                     "image": image_url,
+                    "attachmentUrl": attachment_url,
+                    "mediaType": media_type,
+                    "fileName": file_name,
+                    "voiceMessage": voice_message,
+                    "durationSeconds": duration_seconds,
                     "createdAt": now,
                     "status": ("delivered" if receiver_online else "sent"),
                     "edited": False,
@@ -375,7 +386,13 @@ async def websocket_group(
                 continue
 
             message = (parsed.get("message") or "").strip()
-            if not message:
+            attachment_url = parsed.get("attachmentUrl")
+            media_type = parsed.get("mediaType")
+            file_name = parsed.get("fileName")
+            voice_message = bool(parsed.get("voiceMessage"))
+            raw_duration = parsed.get("durationSeconds")
+            duration_seconds = raw_duration if isinstance(raw_duration, (int, float)) and 0 <= raw_duration <= 3600 else None
+            if not message and not attachment_url:
                 continue
 
             sender = await db.users.find_one({"_id": ObjectId(sender_id)})
@@ -385,6 +402,11 @@ async def websocket_group(
                 "senderId": sender_id,
                 "senderName": sender.get("name", "") if sender else "",
                 "message": message,
+                "attachmentUrl": attachment_url,
+                "mediaType": media_type,
+                "fileName": file_name,
+                "voiceMessage": voice_message,
+                "durationSeconds": duration_seconds,
                 "createdAt": now,
                 "edited": False,
                 "deleted": False,
@@ -402,6 +424,11 @@ async def websocket_group(
                     "senderId": sender_id,
                     "senderName": message_doc["senderName"],
                     "message": message,
+                    "attachmentUrl": attachment_url,
+                    "mediaType": media_type,
+                    "fileName": file_name,
+                    "voiceMessage": voice_message,
+                    "durationSeconds": duration_seconds,
                     "createdAt": now.isoformat().replace("+00:00", "Z"),
                     "edited": False,
                     "deleted": False,

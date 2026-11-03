@@ -43,7 +43,12 @@ async def get_messages(
             "id": str(doc["_id"]),
             "senderId": doc["senderId"],
             "receiverId": doc["receiverId"],
-            "message": doc["message"],
+            "message": doc.get("message", ""),
+            "attachmentUrl": doc.get("attachmentUrl") or doc.get("image"),
+            "mediaType": doc.get("mediaType") or ("image/jpeg" if doc.get("image") else None),
+            "fileName": doc.get("fileName"),
+            "voiceMessage": doc.get("voiceMessage", False),
+            "durationSeconds": doc.get("durationSeconds"),
 
             # IMPORTANT FIX
             "createdAt": (

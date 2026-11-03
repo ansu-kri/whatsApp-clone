@@ -3,6 +3,11 @@ export type ChatMessage = {
   senderId: string;
   receiverId: string;
   message: string;
+  attachmentUrl?: string;
+  mediaType?: string;
+  fileName?: string;
+  voiceMessage?: boolean;
+  durationSeconds?: number;
   createdAt: string;
   status: "sent" | "delivered" | "seen";
   seen?: boolean;
@@ -46,6 +51,11 @@ export interface GroupMessage {
   senderName?: string;
   groupId: string;
   message: string;
+  attachmentUrl?: string;
+  mediaType?: string;
+  fileName?: string;
+  voiceMessage?: boolean;
+  durationSeconds?: number;
   createdAt: string;
   status?: string;
   edited?: boolean;
