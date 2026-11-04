@@ -1,3 +1,4 @@
+import UserAvatar from "./UserAvatar";
 import { useEffect, useState } from "react";
 import { ImagePlus, X, Users } from "lucide-react";
 import { useCreateGroupMutation, useUploadImageMutation } from "@/app/groupApi";
@@ -17,11 +18,7 @@ type Props = {
   users: User[];
 };
 
-export default function CreateGroupModal({
-  isOpen,
-  onClose,
-  users,
-}: Props) {
+export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
   const [groupName, setGroupName] = useState("");
   const [groupImage, setGroupImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -48,7 +45,7 @@ export default function CreateGroupModal({
     setSelectedMembers((prev) =>
       prev.includes(id)
         ? prev.filter((memberId) => memberId !== id)
-        : [...prev, id]
+        : [...prev, id],
     );
   };
 
@@ -59,7 +56,9 @@ export default function CreateGroupModal({
     }
 
     if (groupImage) {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(groupImage.type)) {
+      if (
+        !["image/png", "image/jpeg", "image/webp"].includes(groupImage.type)
+      ) {
         toast.error("Choose a PNG, JPG, JPEG, or WEBP image");
         return;
       }
@@ -106,9 +105,7 @@ export default function CreateGroupModal({
 
       const detail = error?.data?.detail;
       toast.error(
-        typeof detail === "string"
-          ? detail
-          : "Failed to create group"
+        typeof detail === "string" ? detail : "Failed to create group",
       );
     }
   };
@@ -119,15 +116,10 @@ export default function CreateGroupModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <Users className="text-purple-400" size={20} />
-            <h2 className="text-lg font-semibold text-white">
-              Create Group
-            </h2>
+            <h2 className="text-lg font-semibold text-white">Create Group</h2>
           </div>
 
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={20} />
           </button>
         </div>
@@ -157,7 +149,10 @@ export default function CreateGroupModal({
               accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
               onChange={(e) => {
                 const file = e.target.files?.[0] || null;
-                if (file && !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+                if (
+                  file &&
+                  !["image/png", "image/jpeg", "image/webp"].includes(file.type)
+                ) {
                   toast.error("Choose a PNG, JPG, JPEG, or WEBP image");
                   e.target.value = "";
                   setGroupImage(null);
@@ -174,9 +169,15 @@ export default function CreateGroupModal({
               className="w-full text-sm text-gray-400"
             />
             {imagePreview ? (
-              <img src={imagePreview} alt="Group image preview" className="mt-3 h-20 w-20 rounded-full border border-white/10 object-cover" />
+              <img
+                src={imagePreview}
+                alt="Group image preview"
+                className="mt-3 h-20 w-20 rounded-full border border-white/10 object-cover"
+              />
             ) : (
-              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-full bg-[#241d34] text-purple-300"><ImagePlus size={24} /></div>
+              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-full bg-[#241d34] text-purple-300">
+                <ImagePlus size={24} />
+              </div>
             )}
           </div>
 
@@ -189,28 +190,27 @@ export default function CreateGroupModal({
               {users
                 .filter((user) => user.id !== currentUserId)
                 .map((user) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => toggleMember(user.id)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => toggleMember(user.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition
                     ${
                       selectedMembers.includes(user.id)
                         ? "bg-purple-600/20 border border-purple-500"
                         : "bg-[#241d34] border border-transparent hover:border-white/10"
                     }`}
-                >
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
+                  >
+                    <UserAvatar
+                      userId={user.id}
+                      name={user.name}
+                      imageUrl={user.avatar}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
 
-                  <span className="text-white">
-                    {user.name}
-                  </span>
-                </button>
-              ))}
+                    <span className="text-white">{user.name}</span>
+                  </button>
+                ))}
             </div>
           </div>
 
@@ -224,7 +224,11 @@ export default function CreateGroupModal({
             }
             className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition"
           >
-            {isUploading ? "Uploading image..." : isLoading ? "Creating..." : "Create Group"}
+            {isUploading
+              ? "Uploading image..."
+              : isLoading
+                ? "Creating..."
+                : "Create Group"}
           </button>
         </div>
       </div>

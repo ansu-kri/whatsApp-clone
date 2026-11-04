@@ -73,7 +73,7 @@ async def login(
     
     await db.users.update_one(
         {"_id": user["_id"]},
-        {"$set": {"isOnline": True}}
+        {"$set": {"lastSeen": datetime.now(timezone.utc)}}
     )
 
     token = create_access_token({

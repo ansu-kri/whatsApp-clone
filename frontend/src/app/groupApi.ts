@@ -17,6 +17,7 @@ export interface GroupMember {
     id: string;
     name: string;
     avatar?: string;
+    isAdmin?: boolean;
 }
 
 export interface Group {
@@ -25,6 +26,7 @@ export interface Group {
     members: GroupMember[];
     groupImage?: string;
     createdBy?: string;
+    admins?: string[];
 }
 
 export interface CreateGroupResponse {
@@ -103,6 +105,16 @@ export const groupApis = apiSlice.injectEndpoints({
             invalidatesTags: ["Groups"],
         }),
 
+
+        leaveGroup: builder.mutation<Group, string>({
+            query: (groupId) => ({ url: `/api/group/${groupId}/members/me`, method: "DELETE" }),
+            invalidatesTags: ["Groups"],
+        }),
+
+        deleteGroup: builder.mutation<{ id: string; deleted: boolean }, string>({
+            query: (groupId) => ({ url: `/api/group/${groupId}`, method: "DELETE" }),
+            invalidatesTags: ["Groups"],
+        }),
         removeGroupMember: builder.mutation<
             Group,
             { groupId: string; memberId: string }
@@ -123,4 +135,6 @@ export const {
     useGetGroupMessageQuery,
     useAddGroupMembersMutation,
     useRemoveGroupMemberMutation,
+    useLeaveGroupMutation,
+    useDeleteGroupMutation,
 } = groupApis;

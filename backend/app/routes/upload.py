@@ -27,7 +27,7 @@ async def upload_media(
     purpose: str = Query(default="attachment"),
     payload: dict = Depends(verify_token),
 ):
-    if purpose not in ("attachment", "group-avatar"):
+    if purpose not in ("attachment", "group-avatar", "profile-avatar"):
         raise HTTPException(status_code=400, detail="Unsupported upload purpose")
     content = await file.read(MAX_UPLOAD_BYTES + 1)
     await file.close()
@@ -41,12 +41,17 @@ async def upload_media(
             raise HTTPException(status_code=415, detail="Group images must be PNG, JPG, JPEG, or WEBP")
         if len(content) > 5 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Group images must be 5 MB or smaller")
+    if purpose == "profile-avatar":
+        if media_type not in ("image/png", "image/jpeg", "image/webp"):
+            raise HTTPException(status_code=415, detail="Profile images must be PNG, JPG, JPEG, or WEBP")
+        if len(content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Profile images must be 5 MB or smaller")
     media_id = uuid.uuid4().hex
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     path = UPLOAD_DIR / f"{media_id}{extension}"
     path.write_bytes(content)
     name = Path(file.filename or "media").name[:180]
-    await db.uploads.insert_one({"_id": media_id, "ownerId": payload.get("user_id"), "path": str(path), "mediaType": media_type, "fileName": name})
+    await db.uploads.insert_one({"_id": media_id, "ownerId": payload.get("user_id"), "purpose": purpose, "path": str(path), "mediaType": media_type, "fileName": name})
     return {"mediaUrl": f"/api/upload/media/{media_id}", "mediaType": media_type, "fileName": name}
 
 @router.get("/media/{media_id}")
@@ -61,7 +66,7 @@ async def get_media(media_id: str, payload: dict = Depends(verify_token)):
         group_message = await db.group_messages.find_one({"attachmentUrl": url})
         if group_message:
             try:
-                allowed = await db.groups.find_one({"_id": ObjectId(group_message["groupId"]), "members": uid})
+                allowed = await db.groups.find_one({"_id": ObjectId(group_message["groupId"]), "members": uid, "isDeleted": {"$ne": True}})
             except Exception:
                 allowed = None
             if not allowed:
@@ -69,9 +74,11 @@ async def get_media(media_id: str, payload: dict = Depends(verify_token)):
 
     group_avatar = None
     if not private and not group_message:
-        group_avatar = await db.groups.find_one({"groupImage": url, "members": uid})
+        group_avatar = await db.groups.find_one({"groupImage": url, "members": uid, "isDeleted": {"$ne": True}})
 
-    if not private and not group_message and not group_avatar:
+    profile_avatar = await db.users.find_one({"avatar": url})
+
+    if not private and not group_message and not group_avatar and not profile_avatar:
         raise HTTPException(status_code=403, detail="You are not allowed to view this media")
     path = Path(record["path"]).resolve()
     if path.parent != UPLOAD_DIR.resolve() or not path.is_file(): raise HTTPException(status_code=404, detail="Media not found")

@@ -1,5 +1,5 @@
 from jose import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 SECRET_KEY = "SECRET123"
 
@@ -9,7 +9,7 @@ def create_access_token(data:dict):
 
     to_encode = data.copy()
 
-    expire = datetime.utcnow() + timedelta(days=7)
+    expire = datetime.now(timezone.utc) + timedelta(days=7)
 
     to_encode.update({
         "exp": expire

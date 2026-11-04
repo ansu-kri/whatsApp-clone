@@ -5,14 +5,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useGetUsersQuery } from "../app/userApi";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import { useGetGroupsQuery } from "@/app/groupApi";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import apiSlice from "@/app/api";
 import type { Group } from "../components/Sidebar";
 import GroupChatWindow from "@/components/GroupChatWindow";
+import { getSocket } from "@/socket/socket";
+import toast from "react-hot-toast";
 
 export default function Chat() {
   const { data: apiUsers = [], isLoading } = useGetUsersQuery();
 
-  const [onlineUsers] = useState<string[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [liveLastSeen, setLiveLastSeen] = useState<Record<string, string>>({});
   const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
   const [recentMessages, setRecentMessages] = useState<Record<string, string>>(
     {},
@@ -20,33 +24,95 @@ export default function Chat() {
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
   const userId = useSelector((state: any) => state.auth.user?.userId);
+  const dispatch = useDispatch();
   // console.log("userId", userId);
-  const { data: groups = [], refetch } = useGetGroupsQuery(userId, { skip: !userId,
+  const { data: groups = [], refetch } = useGetGroupsQuery(userId, {
+    skip: !userId,
     refetchOnMountOrArgChange: true,
-   });
+  });
 
   useEffect(() => {
-    if(userId) refetch();
-  },[userId])
+    if (userId) refetch();
+  }, [userId, refetch]);
 
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    const socket = getSocket(userId);
+    const onMessage = (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "online_list") setOnlineUsers(data.users || []);
+      if (data.type === "user_online")
+        setOnlineUsers((old) =>
+          old.includes(data.userId) ? old : [...old, data.userId],
+        );
+      if (data.type === "user_offline") {
+        setOnlineUsers((old) => old.filter((id) => id !== data.userId));
+        if (data.lastSeen)
+          setLiveLastSeen((old) => ({ ...old, [data.userId]: data.lastSeen }));
+      }
+      if (data.type === "user_activity")
+        setLiveLastSeen((old) => ({ ...old, [data.userId]: data.lastSeen }));
+      if (data.type === "group_members_updated") {
+        dispatch(apiSlice.util.invalidateTags(["Groups"]));
+        if (data.group?.id) setSelectedGroup((current) => {
+          if (current?.id !== data.group.id) return current;
+          return data.group.members?.some((member: { id: string }) => member.id === userId) ? data.group : null;
+        });
+      }
+      if (data.type === "group_system_event" && data.event === "member_removed" && data.memberId === userId) {
+        toast.error("You were removed from a group.");
+      }
+      if (data.type === "group_deleted") {
+        dispatch(apiSlice.util.invalidateTags(["Groups"]));
+        if (data.deletedBy !== userId) toast("A group you belong to was deleted.");
+        setSelectedGroup((current) => current?.id === data.groupId ? null : current);
+      }
+    };
+    socket.addEventListener("message", onMessage);
+    let idleTimer: number;
+    const markInactive = () => {
+      if (socket.readyState === WebSocket.OPEN)
+        socket.send(JSON.stringify({ type: "inactive" }));
+    };
+    const activity = () => {
+      if (socket.readyState === WebSocket.OPEN)
+        socket.send(JSON.stringify({ type: "activity" }));
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(markInactive, 5 * 60_000);
+    };
+    activity();
+    window.addEventListener("focus", activity);
+    window.addEventListener("pointerdown", activity);
+    window.addEventListener("keydown", activity);
+    window.addEventListener("touchstart", activity);
+    return () => {
+      socket.removeEventListener("message", onMessage);
+      window.clearTimeout(idleTimer);
+      window.removeEventListener("focus", activity);
+      window.removeEventListener("pointerdown", activity);
+      window.removeEventListener("keydown", activity);
+      window.removeEventListener("touchstart", activity);
+    };
+  }, [userId, dispatch]);
 
   const users: ChatUser[] = useMemo(
     () =>
       apiUsers.map((user) => ({
         id: user.id,
         name: user.name,
-        avatar: `https://i.pravatar.cc/150?u=${user.id}`,
+        avatar: user.avatar || "",
         recentMessage: recentMessages[user.id] || "",
         lastChatTime: "",
         chats: [],
         isOnline: onlineUsers.includes(user.id),
         typing: false,
         unreadCount: 0,
-        lastSeen: user.lastSeen || "",
+        lastSeen: liveLastSeen[user.id] || user.lastSeen || "",
       })),
 
-    [apiUsers, onlineUsers, recentMessages],
+    [apiUsers, onlineUsers, recentMessages, liveLastSeen],
   );
 
   useEffect(() => {

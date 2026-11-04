@@ -60,6 +60,7 @@ def main():
 
     try:
         client = TestClient(app)
+        client.__enter__()
         creator = auth_header(ids["creator"], "c@test.com")
         member = auth_header(ids["member"], "m@test.com")
         outsider = auth_header(ids["outsider"], "o@test.com")
@@ -139,7 +140,7 @@ def main():
         check(private_leak is None, "group messages are not stored in private messages collection")
 
         with client.websocket_connect(
-            f"/ws/group/{group_id}?userId={ids['creator']}"
+            f"/ws/group/{group_id}?token={creator['Authorization'].split(' ', 1)[1]}"
         ) as ws:
             ws.send_json({
                 "type": "group_message",
@@ -157,7 +158,7 @@ def main():
 
         try:
             with client.websocket_connect(
-                f"/ws/group/{group_id}?userId={ids['outsider']}"
+                f"/ws/group/{group_id}?token={outsider['Authorization'].split(' ', 1)[1]}"
             ) as ws:
                 ws.receive_json()
             check(False, "outsider websocket should be rejected")
@@ -178,6 +179,7 @@ def main():
         check(left.status_code == 200, "member can leave group")
 
     finally:
+        client.__exit__(None, None, None)
         cleanup(ids, group_id)
 
     if failures:

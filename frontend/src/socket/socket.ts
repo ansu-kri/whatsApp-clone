@@ -14,8 +14,12 @@ export const getSocket = (userId: string) => {
     return sockets[key];
   }
 
+  const token = localStorage.getItem("token");
+  const wsBase = (
+    import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
+  ).replace(/^http/, "ws");
   sockets[key] = new WebSocket(
-    `ws://127.0.0.1:8000/ws/chat?userId=${userId}`
+    `${wsBase}/ws/chat?token=${encodeURIComponent(token || "")}`,
   );
 
   sockets[key].onopen = () => {
@@ -34,6 +38,7 @@ export const getSocket = (userId: string) => {
 };
 
 export const getGroupSocket = (groupId: string, userId?: string) => {
+  void userId; // The server derives identity from the authenticated token.
   const key = `group_${groupId}`;
 
   const existing = sockets[key];
@@ -42,9 +47,12 @@ export const getGroupSocket = (groupId: string, userId?: string) => {
     return existing;
   }
 
-  const memberId = userId || currentUserId || "";
+  const token = localStorage.getItem("token");
+  const wsBase = (
+    import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
+  ).replace(/^http/, "ws");
   const socket = new WebSocket(
-    `ws://127.0.0.1:8000/ws/group/${groupId}?userId=${memberId}`
+    `${wsBase}/ws/group/${groupId}?token=${encodeURIComponent(token || "")}`,
   );
 
   sockets[key] = socket;
@@ -68,7 +76,7 @@ export const getGroupSocket = (groupId: string, userId?: string) => {
 export const sendSocketMessage = (
   data: any,
   type: "private" | "group" = "private",
-  id?: string
+  id?: string,
 ) => {
   let socket;
 
@@ -92,43 +100,10 @@ export const sendSocketMessage = (
   }
 };
 
-// let socket: WebSocket | null = null;
-// let currentUserId: string | null = null;
-
-// export const getSocket = (userId: string) => {
-//   currentUserId = userId;
-
-//   if (socket && socket.readyState === WebSocket.OPEN) return socket;
-//   if (socket && socket.readyState === WebSocket.CONNECTING) return socket;
-
-//   socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat?userId=${userId}`);
-
-//   socket.onopen = () => {
-//     console.log("✅ Socket connected");
-//   };
-
-//   socket.onclose = () => {
-//     console.log("❌ Socket disconnected");
-//     socket = null;
-
-//     setTimeout(() => {
-//       if (currentUserId) getSocket(currentUserId);
-//     }, 1500);
-//   };
-
-//   socket.onerror = (e) => {
-//     console.log("Socket error:", e);
-//   };
-
-//   return socket;
-// };
-
-// export const sendSocketMessage = (data: any) => {
-//   if (!socket || socket.readyState !== WebSocket.OPEN) {
-//     console.log("❌ Socket not ready");
-//     return false;
-//   }
-
-//   socket.send(JSON.stringify(data));
-//   return true;
-// };
+if (typeof window !== "undefined") {
+  window.addEventListener("logout", () => {
+    Object.values(sockets).forEach((socket) => socket.close());
+    sockets = {};
+    currentUserId = null;
+  });
+}

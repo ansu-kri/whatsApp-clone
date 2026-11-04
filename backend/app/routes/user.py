@@ -1,73 +1,69 @@
-from fastapi import APIRouter, Depends
-from app.utils.security import oauth2_scheme
-from app.utils.jwt import SECRET_KEY, ALGORITHM
-from jose import jwt
+import re
+from datetime import timezone
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from bson import ObjectId
+from app.middleware.authMiddleware import verify_token
 from app.database import db
 
 router = APIRouter()
 
-@router.get("/me")
-async def get_me(token: str = Depends(oauth2_scheme)):
+class UpdateProfileRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=3, max_length=254)
+    avatar: str | None = None
 
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
-    user_id = payload["user_id"]
-
-    current_user = await db.users.find_one({
-        "_id": ObjectId(user_id)
-    })
-
+def _serialize_user(user: dict) -> dict:
+    last_seen = user.get("lastSeen")
+    if last_seen and last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
     return {
-        "id": str(current_user["_id"]),
-        "name": current_user["name"],
-        "email": current_user["email"],
-        "avatar": current_user.get("avatar"),
-        "createdAt": (
-            current_user["createdAt"].isoformat()
-            if "createdAt" in current_user
-            else None
-        )
+        "id": str(user["_id"]), "name": user.get("name", ""),
+        "email": user.get("email", ""), "avatar": user.get("avatar") or "",
+        "createdAt": user["createdAt"].isoformat() if user.get("createdAt") else None,
+        "lastSeen": last_seen.isoformat().replace("+00:00", "Z") if last_seen else None,
+        "isOnline": bool(user.get("isOnline", False)),
     }
 
-# //Get all users
-@router.get("/")
-async def get_users(token: str = Depends(oauth2_scheme)):
-
+@router.get("/me")
+async def get_me(payload: dict = Depends(verify_token)):
     try:
+        current_user = await db.users.find_one({"_id": ObjectId(payload["user_id"])})
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid user session")
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _serialize_user(current_user)
 
-        payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
-        )
+@router.patch("/me")
+async def update_me(data: UpdateProfileRequest, payload: dict = Depends(verify_token)):
+    try:
+        user_id = ObjectId(payload["user_id"])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid user session")
+    name, email = data.name.strip(), data.email.strip().lower()
+    if not name:
+        raise HTTPException(status_code=422, detail="Name cannot be empty")
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        raise HTTPException(status_code=422, detail="Enter a valid email address")
+    if await db.users.find_one({"email": email, "_id": {"$ne": user_id}}):
+        raise HTTPException(status_code=409, detail="Email address is already in use")
+    avatar = data.avatar or ""
+    if avatar:
+        media_id = avatar.rsplit("/", 1)[-1]
+        record = await db.uploads.find_one({"_id": media_id, "ownerId": str(user_id), "purpose": "profile-avatar"})
+        if not record:
+            raise HTTPException(status_code=403, detail="Profile image does not belong to this account")
+    await db.users.update_one({"_id": user_id}, {"$set": {"name": name, "email": email, "avatar": avatar}})
+    return _serialize_user(await db.users.find_one({"_id": user_id}))
 
-        current_user_id = payload["user_id"]
-
-        users = []
-
-        cursor = db.users.find({
-            "_id": {
-                "$ne": ObjectId(current_user_id)
-            }
-        })
-
-        async for user in cursor:
-
-            users.append({
-                "id": str(user["_id"]),
-                "name": user["name"],
-                "email": user["email"],
-                "lastSeen": (
-                    user["lastSeen"].isoformat()
-                    if user.get("lastSeen")
-                    else None
-                )
-            })
-
-        return users
-
-    except Exception as e:
-        return {
-            "error": str(e)
-        }
+@router.get("/")
+async def get_users(payload: dict = Depends(verify_token)):
+    try:
+        current_user_id = ObjectId(payload["user_id"])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid user session")
+    users = []
+    async for user in db.users.find({"_id": {"$ne": current_user_id}}):
+        users.append(_serialize_user(user))
+    return users

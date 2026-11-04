@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { Group } from "../components/Sidebar";
 import ChatHeader from "./ChatHeader";
+import UserAvatar from "./UserAvatar";
 import GroupMessageBubble from "./GroupMessageBubble";
 import GroupMessageInput from "./GroupMessageInput";
 import type { ChatUser, GroupMessage } from "./types";
@@ -8,6 +9,8 @@ import {
   useAddGroupMembersMutation,
   useGetGroupMessageQuery,
   useRemoveGroupMemberMutation,
+  useLeaveGroupMutation,
+  useDeleteGroupMutation,
 } from "@/app/groupApi";
 import { skipToken } from "@reduxjs/toolkit/query";
 import { getGroupSocket, sendSocketMessage } from "@/socket/socket";
@@ -44,8 +47,9 @@ export default function GroupChatWindow({
 
   const [addMembers, { isLoading: addingMembers }] =
     useAddGroupMembersMutation();
-  const [removeMember, { isLoading: removingMember }] =
-    useRemoveGroupMemberMutation();
+  const [removeMember, { isLoading: removingMember }] = useRemoveGroupMemberMutation();
+  const [leaveGroup, { isLoading: isLeaving }] = useLeaveGroupMutation();
+  const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
 
   const { data: groupMessages = [] } = useGetGroupMessageQuery(
     group?.id ? { groupId: group.id } : skipToken,
@@ -95,6 +99,28 @@ export default function GroupChatWindow({
 
     const handleMessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
+
+      if (data.type === "group_members_updated") {
+        if (data.group?.id === group.id) {
+          const stillMember = data.group.members?.some((member: { id: string }) => member.id === currentUserId);
+          if (stillMember) onGroupUpdated(data.group);
+        }
+        return;
+      }
+
+      if (data.type === "group_system_event") {
+        if (data.memberId === currentUserId && data.event === "member_removed") {
+          onBack();
+        } else if (data.actorId !== currentUserId && !(data.memberId === currentUserId && data.event === "member_left")) {
+          toast(data.message || "Group membership changed.");
+        }
+        return;
+      }
+
+      if (data.type === "group_deleted") {
+        onBack();
+        return;
+      }
 
       if (data.type === "group_typing") {
         if (data.senderId !== currentUserId) {
@@ -149,7 +175,7 @@ export default function GroupChatWindow({
       socket.removeEventListener("open", handleOpen);
       socket.removeEventListener("message", handleMessage);
     };
-  }, [group.id, currentUserId, group.members, setRecentMessages]);
+  }, [group.id, currentUserId, group.members, onBack, onGroupUpdated, setRecentMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -200,6 +226,8 @@ export default function GroupChatWindow({
   };
 
   const handleRemoveMember = async (memberId: string) => {
+    const member = group.members.find((item: any) => item.id === memberId);
+    if (!window.confirm(`Remove ${member?.name || "this member"} from the group?`)) return;
     try {
       const updated = await removeMember({
         groupId: group.id,
@@ -217,11 +245,33 @@ export default function GroupChatWindow({
     }
   };
 
-  const isCreator = group.createdBy === currentUserId;
+  const isGroupAdmin = !!currentUserId && (group.admins?.includes(currentUserId) || group.createdBy === currentUserId);
+
+  const handleLeaveGroup = async () => {
+    try {
+      await leaveGroup(group.id).unwrap();
+      toast.success("You left the group");
+      onBack();
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Failed to leave group");
+      throw error;
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    try {
+      await deleteGroup(group.id).unwrap();
+      toast.success("Group deleted");
+      onBack();
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Failed to delete group");
+      throw error;
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814]">
-      <ChatHeader type="group" group={group} onBack={onBack} />
+      <ChatHeader type="group" group={group} onBack={onBack} onLeaveGroup={handleLeaveGroup} onDeleteGroup={handleDeleteGroup} groupActionLoading={isLeaving || isDeleting} />
 
       <div className="px-4 py-3 border-b border-white/5">
         <h3 className="text-sm text-gray-400 mb-2 text-center">Members</h3>
@@ -232,37 +282,32 @@ export default function GroupChatWindow({
               key={member.id}
               className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg"
             >
-              <img
-                src={
-                  member.avatar ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    member.name || "User",
-                  )}`
-                }
-                alt={member.name}
+              <UserAvatar
+                userId={member.id}
+                name={member.name || "User"}
+                imageUrl={member.avatar}
                 className="w-8 h-8 rounded-full object-cover"
               />
 
               <span className="text-white text-sm">
                 {member.name}
-                {member.id === group.createdBy ? " (admin)" : ""}
+                {member.isAdmin || group.admins?.includes(member.id) || member.id === group.createdBy ? " (admin)" : ""}
               </span>
 
-              {(isCreator && member.id !== currentUserId) ||
-              member.id === currentUserId ? (
+              {isGroupAdmin && member.id !== currentUserId ? (
                 <button
                   disabled={removingMember}
                   onClick={() => handleRemoveMember(member.id)}
                   className="text-xs text-red-400 hover:text-red-300"
                 >
-                  {member.id === currentUserId ? "Leave" : "Remove"}
+                  Remove
                 </button>
               ) : null}
             </div>
           ))}
         </div>
 
-        {isCreator && availableUsers.length > 0 && (
+        {isGroupAdmin && availableUsers.length > 0 && (
           <div className="mt-3 flex justify-center gap-2">
             <select
               value={memberToAdd}

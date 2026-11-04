@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from app.routes.upload import router as uploadRouter
 from app.routes.group import router as groupRouter
+from app.middleware.authMiddleware import SECRET_KEY, ALGORITHM
+from jose import jwt
 
 app = FastAPI()
 
@@ -53,13 +55,17 @@ app.add_middleware(
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
 
-    user_id = websocket.query_params.get("userId")
-
-    if not user_id:
-        await websocket.close()
+    token = websocket.query_params.get("token")
+    try:
+        payload = jwt.decode(token or "", SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        ObjectId(user_id)
+    except Exception:
+        await websocket.close(code=1008)
         return
 
     await manager.connect_user(user_id, websocket)
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"isOnline": True, "lastSeen": datetime.now(timezone.utc)}})
 
     try:
 
@@ -68,7 +74,7 @@ async def websocket_endpoint(websocket: WebSocket):
             user_id,
             json.dumps({
                 "type": "online_list",
-                "users": list(manager.active_connections.keys())
+                "users": list(manager.active_users)
             })
         )
 
@@ -103,6 +109,30 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             parsed = json.loads(data)
             event = parsed.get("type")
+
+            if event == "activity":
+                now = datetime.now(timezone.utc)
+                was_online, is_online = manager.set_connection_active(user_id, websocket, True)
+                await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"lastSeen": now, "isOnline": is_online}})
+                if not was_online:
+                    await manager.broadcast_all(json.dumps({"type": "user_online", "userId": user_id}))
+                else:
+                    await manager.broadcast_all(json.dumps({"type": "user_activity", "userId": user_id, "lastSeen": now.isoformat().replace("+00:00", "Z")}))
+                continue
+
+            if event == "inactive":
+                was_online, is_online = manager.set_connection_active(user_id, websocket, False)
+                await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"isOnline": is_online}})
+                if was_online and not is_online:
+                    user = await db.users.find_one({"_id": ObjectId(user_id)}, {"lastSeen": 1})
+                    last_seen = user.get("lastSeen") if user else None
+                    if last_seen and last_seen.tzinfo is None:
+                        last_seen = last_seen.replace(tzinfo=timezone.utc)
+                    await manager.broadcast_all(json.dumps({
+                        "type": "user_offline", "userId": user_id,
+                        "lastSeen": last_seen.isoformat().replace("+00:00", "Z") if last_seen else None,
+                    }))
+                continue
 
             # ================= TYPING =================
             if event == "typing":
@@ -313,37 +343,34 @@ async def websocket_endpoint(websocket: WebSocket):
         print("Client disconnected")
 
     finally:
-        manager.disconnect_user(user_id, websocket)
-
-        #save last seen
-        await db.users.update_one(
-            {"_id": ObjectId(user_id)},
-            {
-                "$set": {
-                    "lastSeen": datetime.now(timezone.utc)
-                }
-            }
-        )
-
-        #Broadcast offline
-        await manager.broadcast_all(json.dumps({
-            "type": "user_offline",
-            "userId": user_id
-        }))
+        became_offline = manager.disconnect_user(user_id, websocket)
+        if became_offline:
+            last_seen = datetime.now(timezone.utc)
+            await db.users.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": {"isOnline": False, "lastSeen": last_seen}}
+            )
+            await manager.broadcast_all(json.dumps({
+                "type": "user_offline", "userId": user_id,
+                "lastSeen": last_seen.isoformat().replace("+00:00", "Z")
+            }))
 
 #============Group chat==============
 @app.websocket("/ws/group/{room_id}")
 async def websocket_group(
     websocket: WebSocket, room_id: str
 ):
-    user_id = websocket.query_params.get("userId")
-
-    if not user_id:
+    token = websocket.query_params.get("token")
+    try:
+        payload = jwt.decode(token or "", SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        ObjectId(user_id)
+    except Exception:
         await websocket.close(code=1008)
         return
 
     try:
-        group = await db.groups.find_one({"_id": ObjectId(room_id)})
+        group = await db.groups.find_one({"_id": ObjectId(room_id), "isDeleted": {"$ne": True}})
     except Exception:
         await websocket.close(code=1008)
         return
@@ -352,7 +379,7 @@ async def websocket_group(
         await websocket.close(code=1008)
         return
 
-    await manager.connect_room(room_id, websocket)
+    await manager.connect_room(room_id, websocket, user_id)
 
     try:
         while True:
@@ -368,7 +395,7 @@ async def websocket_group(
             if sender_id != user_id:
                 continue
 
-            fresh_group = await db.groups.find_one({"_id": ObjectId(room_id)})
+            fresh_group = await db.groups.find_one({"_id": ObjectId(room_id), "isDeleted": {"$ne": True}})
             if not fresh_group or user_id not in fresh_group.get("members", []):
                 await websocket.close(code=1008)
                 break
