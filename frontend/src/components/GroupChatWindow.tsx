@@ -13,7 +13,7 @@ import {
   useDeleteGroupMutation,
 } from "@/app/groupApi";
 import { skipToken } from "@reduxjs/toolkit/query";
-import { getGroupSocket, sendSocketMessage } from "@/socket/socket";
+import { subscribeGroupSocket, sendSocketMessage } from "@/socket/socket";
 import { useGetMeQuery } from "@/app/userApi";
 import toast from "react-hot-toast";
 
@@ -39,15 +39,19 @@ export default function GroupChatWindow({
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<GroupMessage[]>([]);
-  const [typingUser, setTypingUser] = useState("");
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [memberToAdd, setMemberToAdd] = useState("");
+  const [groupSocket, setGroupSocket] = useState<WebSocket | null>(null);
 
-  const socketRef = useRef<WebSocket | null>(null);
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const [addMembers, { isLoading: addingMembers }] =
     useAddGroupMembersMutation();
-  const [removeMember, { isLoading: removingMember }] = useRemoveGroupMemberMutation();
+  const [removeMember, { isLoading: removingMember }] =
+    useRemoveGroupMemberMutation();
   const [leaveGroup, { isLoading: isLeaving }] = useLeaveGroupMutation();
   const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
 
@@ -89,51 +93,80 @@ export default function GroupChatWindow({
 
   useEffect(() => {
     if (!group?.id || !currentUserId) return;
+    return subscribeGroupSocket(group.id, currentUserId, setGroupSocket);
+  }, [group.id, currentUserId]);
 
-    const socket = getGroupSocket(group.id, currentUserId);
-    socketRef.current = socket;
-
-    const handleOpen = () => {
-      console.log("Socket ready for group:", group.id);
-    };
-
+  useEffect(() => {
+    if (!groupSocket) return;
+    const handleOpen = () => console.log("Socket ready for group:", group.id);
     const handleMessage = (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-
+      let data: any;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
       if (data.type === "group_members_updated") {
         if (data.group?.id === group.id) {
-          const stillMember = data.group.members?.some((member: { id: string }) => member.id === currentUserId);
+          const stillMember = data.group.members?.some(
+            (member: { id: string }) => member.id === currentUserId,
+          );
           if (stillMember) onGroupUpdated(data.group);
         }
         return;
       }
-
       if (data.type === "group_system_event") {
-        if (data.memberId === currentUserId && data.event === "member_removed") {
+        if (data.memberId === currentUserId && data.event === "member_removed")
           onBack();
-        } else if (data.actorId !== currentUserId && !(data.memberId === currentUserId && data.event === "member_left")) {
+        else if (
+          data.actorId !== currentUserId &&
+          !(data.memberId === currentUserId && data.event === "member_left")
+        )
           toast(data.message || "Group membership changed.");
-        }
         return;
       }
-
       if (data.type === "group_deleted") {
         onBack();
         return;
       }
-
-      if (data.type === "group_typing") {
-        if (data.senderId !== currentUserId) {
+      if (data.type === "group_typing" && data.groupId === group.id) {
+        const senderId = data.senderId as string;
+        if (!senderId || senderId === currentUserId) return;
+        const oldTimer = typingTimersRef.current.get(senderId);
+        if (oldTimer) clearTimeout(oldTimer);
+        if (data.active) {
           const member = group.members?.find(
-            (item: any) => item.id === data.senderId,
+            (item: any) => item.id === senderId,
           );
-          setTypingUser(member?.name || "Someone");
-          setTimeout(() => setTypingUser(""), 1500);
+          setTypingUsers((current) => ({
+            ...current,
+            [senderId]: data.senderName || member?.name || "Someone",
+          }));
+          typingTimersRef.current.set(
+            senderId,
+            setTimeout(() => {
+              setTypingUsers((current) => {
+                const next = { ...current };
+                delete next[senderId];
+                return next;
+              });
+              typingTimersRef.current.delete(senderId);
+            }, 4000),
+          );
+        } else {
+          typingTimersRef.current.delete(senderId);
+          setTypingUsers((current) => {
+            const next = { ...current };
+            delete next[senderId];
+            return next;
+          });
         }
         return;
       }
-
-      if (data.type === "group_message") {
+      if (
+        data.type === "group_message" &&
+        (data.groupId === group.id || data.data?.groupId === group.id)
+      ) {
         const incoming = data.data || {};
         const normalized: GroupMessage = {
           id: incoming.id,
@@ -151,31 +184,47 @@ export default function GroupChatWindow({
           edited: incoming.edited || false,
           deleted: incoming.deleted || false,
         };
-
-        setMessages((prev) => {
-          if (prev.some((msg) => msg.id === normalized.id)) {
-            return prev;
-          }
-          return [...prev, normalized];
-        });
-
+        setMessages((prev) =>
+          prev.some((msg) => msg.id === normalized.id)
+            ? prev
+            : [...prev, normalized],
+        );
         setRecentMessages((prev) => ({
           ...prev,
           [group.id]: normalized.deleted
             ? "This message was deleted"
             : normalized.message,
         }));
+        setTypingUsers((current) => {
+          const next = { ...current };
+          delete next[normalized.senderId];
+          return next;
+        });
       }
     };
-
-    socket.addEventListener("open", handleOpen);
-    socket.addEventListener("message", handleMessage);
-
+    groupSocket.addEventListener("open", handleOpen);
+    groupSocket.addEventListener("message", handleMessage);
     return () => {
-      socket.removeEventListener("open", handleOpen);
-      socket.removeEventListener("message", handleMessage);
+      groupSocket.removeEventListener("open", handleOpen);
+      groupSocket.removeEventListener("message", handleMessage);
     };
-  }, [group.id, currentUserId, group.members, onBack, onGroupUpdated, setRecentMessages]);
+  }, [
+    groupSocket,
+    group.id,
+    currentUserId,
+    group.members,
+    onBack,
+    onGroupUpdated,
+    setRecentMessages,
+  ]);
+
+  useEffect(
+    () => () => {
+      typingTimersRef.current.forEach((timer) => clearTimeout(timer));
+      typingTimersRef.current.clear();
+    },
+    [group.id],
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -185,6 +234,14 @@ export default function GroupChatWindow({
 
   const sendMessage = () => {
     if (!message.trim() || !currentUserId) return;
+    if (groupSocket?.readyState === WebSocket.OPEN)
+      groupSocket.send(
+        JSON.stringify({
+          type: "group_typing",
+          groupId: group.id,
+          active: false,
+        }),
+      );
 
     const success = sendSocketMessage(
       {
@@ -227,7 +284,10 @@ export default function GroupChatWindow({
 
   const handleRemoveMember = async (memberId: string) => {
     const member = group.members.find((item: any) => item.id === memberId);
-    if (!window.confirm(`Remove ${member?.name || "this member"} from the group?`)) return;
+    if (
+      !window.confirm(`Remove ${member?.name || "this member"} from the group?`)
+    )
+      return;
     try {
       const updated = await removeMember({
         groupId: group.id,
@@ -245,7 +305,20 @@ export default function GroupChatWindow({
     }
   };
 
-  const isGroupAdmin = !!currentUserId && (group.admins?.includes(currentUserId) || group.createdBy === currentUserId);
+  const typingNames = Object.values(typingUsers);
+  const groupTypingText =
+    typingNames.length === 1
+      ? typingNames[0] + " is typing..."
+      : typingNames.length === 2
+        ? typingNames[0] + " and " + typingNames[1] + " are typing..."
+        : typingNames.length > 2
+          ? "Several people are typing..."
+          : undefined;
+
+  const isGroupAdmin =
+    !!currentUserId &&
+    (group.admins?.includes(currentUserId) ||
+      group.createdBy === currentUserId);
 
   const handleLeaveGroup = async () => {
     try {
@@ -271,7 +344,15 @@ export default function GroupChatWindow({
 
   return (
     <div className="flex-1 flex flex-col h-screen bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814]">
-      <ChatHeader type="group" group={group} onBack={onBack} onLeaveGroup={handleLeaveGroup} onDeleteGroup={handleDeleteGroup} groupActionLoading={isLeaving || isDeleting} />
+      <ChatHeader
+        type="group"
+        group={group}
+        typingText={groupTypingText}
+        onBack={onBack}
+        onLeaveGroup={handleLeaveGroup}
+        onDeleteGroup={handleDeleteGroup}
+        groupActionLoading={isLeaving || isDeleting}
+      />
 
       <div className="px-4 py-3 border-b border-white/5">
         <h3 className="text-sm text-gray-400 mb-2 text-center">Members</h3>
@@ -291,7 +372,11 @@ export default function GroupChatWindow({
 
               <span className="text-white text-sm">
                 {member.name}
-                {member.isAdmin || group.admins?.includes(member.id) || member.id === group.createdBy ? " (admin)" : ""}
+                {member.isAdmin ||
+                group.admins?.includes(member.id) ||
+                member.id === group.createdBy
+                  ? " (admin)"
+                  : ""}
               </span>
 
               {isGroupAdmin && member.id !== currentUserId ? (
@@ -349,16 +434,6 @@ export default function GroupChatWindow({
             </div>
           )}
 
-          {typingUser && (
-            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow w-fit">
-              <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></span>
-              <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-300"></span>
-
-              <p className="text-sm text-gray-500">{typingUser} is typing...</p>
-            </div>
-          )}
-
           <div ref={bottomRef} />
         </div>
       </div>
@@ -368,7 +443,7 @@ export default function GroupChatWindow({
           message={message}
           setMessage={setMessage}
           onSend={sendMessage}
-          socket={socketRef.current}
+          socket={groupSocket}
           meId={currentUserId}
           groupId={group.id}
         />

@@ -13,6 +13,8 @@ class ConnectionManager:
         #group chat rooms
         self.rooms: Dict[str, List[WebSocket]] = defaultdict(list)
         self.room_users: Dict[str, Dict[WebSocket, str]] = defaultdict(dict)
+        self.private_typing: Dict[tuple[str, str], Set[WebSocket]] = defaultdict(set)
+        self.group_typing: Dict[tuple[str, str], Set[WebSocket]] = defaultdict(set)
 
         #========group chat methods========
     async def connect_room(self, room_id: str, websocket: WebSocket, user_id: str):
@@ -40,6 +42,11 @@ class ConnectionManager:
     async def disconnect_group_user(self, room_id: str, user_id: str):
         sockets = [ws for ws, member_id in self.room_users.get(room_id, {}).items() if member_id == user_id]
         for websocket in sockets:
+            if self.clear_group_typing(room_id, user_id, websocket):
+                await self.broadcast_room(room_id, json.dumps({
+                    "type": "group_typing", "groupId": room_id,
+                    "senderId": user_id, "active": False,
+                }))
             self.disconnect_room(room_id, websocket)
             try:
                 await websocket.close(code=1008, reason="Group membership ended")
@@ -81,14 +88,15 @@ class ConnectionManager:
         if user_id not in self.active_connections:
             self.active_connections[user_id] = set()
 
+        was_online = user_id in self.active_users
         self.active_connections[user_id].add(websocket)
+        self.inactive_connections.discard(websocket)
         self.active_users.add(user_id)
 
-        # notify others user is online
-        await self.broadcast_all(json.dumps({
-            "type": "user_online",
-            "userId": user_id
-        }))
+        if not was_online:
+            await self.broadcast_all(json.dumps({
+                "type": "user_online", "userId": user_id
+            }))
         
         print(f"{user_id} conneted")
 
@@ -108,18 +116,71 @@ class ConnectionManager:
 
     def disconnect_user(self, user_id: str, websocket: WebSocket) -> bool:
         connections = self.active_connections.get(user_id)
-        if not connections:
+        if not connections or websocket not in connections:
             return False
-        was_online, _ = self.set_connection_active(user_id, websocket, False)
-        self.inactive_connections.discard(websocket)
+        was_online = user_id in self.active_users
         connections.discard(websocket)
-        if not connections:
-            del self.active_connections[user_id]
+        self.inactive_connections.discard(websocket)
+        is_online = any(connection not in self.inactive_connections for connection in connections)
+        if is_online:
+            self.active_users.add(user_id)
+        else:
             self.active_users.discard(user_id)
+        if not connections:
+            self.active_connections.pop(user_id, None)
+        if was_online and not is_online:
             print(f"{user_id} offline")
-            return was_online
-        self.set_connection_active(user_id, next(iter(connections)), next(iter(connections)) not in self.inactive_connections)
-        return was_online and user_id not in self.active_users
+            return True
+        return False
+
+    def set_private_typing(self, sender_id: str, receiver_id: str, websocket: WebSocket, active: bool) -> bool:
+        key = (sender_id, receiver_id)
+        sockets = self.private_typing[key]
+        was_active = bool(sockets)
+        if active:
+            sockets.add(websocket)
+        else:
+            sockets.discard(websocket)
+        is_active = bool(sockets)
+        if not is_active:
+            self.private_typing.pop(key, None)
+        return was_active != is_active
+
+    def clear_private_typing(self, sender_id: str, websocket: WebSocket) -> list[str]:
+        stopped_receivers = []
+        for sender, receiver in list(self.private_typing):
+            if sender != sender_id:
+                continue
+            sockets = self.private_typing[(sender, receiver)]
+            sockets.discard(websocket)
+            if not sockets:
+                self.private_typing.pop((sender, receiver), None)
+                stopped_receivers.append(receiver)
+        return stopped_receivers
+
+    def set_group_typing(self, room_id: str, user_id: str, websocket: WebSocket, active: bool) -> bool:
+        key = (room_id, user_id)
+        sockets = self.group_typing[key]
+        was_active = bool(sockets)
+        if active:
+            sockets.add(websocket)
+        else:
+            sockets.discard(websocket)
+        is_active = bool(sockets)
+        if not is_active:
+            self.group_typing.pop(key, None)
+        return was_active != is_active
+
+    def clear_group_typing(self, room_id: str, user_id: str, websocket: WebSocket) -> bool:
+        key = (room_id, user_id)
+        sockets = self.group_typing.get(key)
+        if not sockets:
+            return False
+        sockets.discard(websocket)
+        if sockets:
+            return False
+        self.group_typing.pop(key, None)
+        return True
 
     def is_online(self, user_id: str) -> bool:
         return user_id in self.active_users

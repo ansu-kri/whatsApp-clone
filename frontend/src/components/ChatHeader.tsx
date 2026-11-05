@@ -22,6 +22,7 @@ type Props = {
   user?: Pick<ChatUser, "id" | "name" | "avatar" | "createdAt" | "lastSeen">;
   group?: GroupType;
   isOnline?: boolean;
+  typingText?: string;
   onBack?: () => void;
   onLeaveGroup?: () => Promise<void>;
   onDeleteGroup?: () => Promise<void>;
@@ -33,6 +34,7 @@ export default function ChatHeader({
   group,
   type = "user",
   isOnline,
+  typingText,
   onBack,
   onLeaveGroup,
   onDeleteGroup,
@@ -42,7 +44,9 @@ export default function ChatHeader({
 
   const navigate = useNavigate();
   const [openProfile, setOpenProfile] = useState(false);
-  const [groupConfirmation, setGroupConfirmation] = useState<"leave" | "delete" | null>(null);
+  const [groupConfirmation, setGroupConfirmation] = useState<
+    "leave" | "delete" | null
+  >(null);
   const { data: me } = useGetMeQuery();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -60,7 +64,9 @@ export default function ChatHeader({
   };
 
   const displayName = type === "group" ? group?.name : user?.name;
-  const isGroupAdmin = !!me?.id && (!!group?.admins?.includes(me.id) || group?.createdBy === me.id);
+  const isGroupAdmin =
+    !!me?.id &&
+    (!!group?.admins?.includes(me.id) || group?.createdBy === me.id);
   const confirmGroupAction = async () => {
     try {
       if (groupConfirmation === "leave") await onLeaveGroup?.();
@@ -73,7 +79,8 @@ export default function ChatHeader({
   };
 
   const subtitle =
-    type === "group"
+    typingText ||
+    (type === "group"
       ? `${group?.members?.length || 0} members`
       : isOnline
         ? "Online"
@@ -100,7 +107,7 @@ export default function ChatHeader({
                 return `Last seen yesterday at ${time}`;
               return `Last seen ${lastSeen.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
             })()
-          : "Offline";
+          : "Offline");
 
   return (
     <>
@@ -212,24 +219,82 @@ export default function ChatHeader({
               </p>
               <div className="mt-4 max-h-48 space-y-2 overflow-y-auto text-left">
                 {group?.members?.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm text-gray-200">
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm text-gray-200"
+                  >
                     <span>{member.name}</span>
-                    {(member.isAdmin || group.admins?.includes(member.id) || group.createdBy === member.id) && <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-300">Admin</span>}
+                    {(member.isAdmin ||
+                      group.admins?.includes(member.id) ||
+                      group.createdBy === member.id) && (
+                      <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-300">
+                        Admin
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
               <div className="mt-5 space-y-2">
-                <button disabled={groupActionLoading} onClick={() => setGroupConfirmation("leave")} className="w-full rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50">Leave Group</button>
-                {isGroupAdmin && <button disabled={groupActionLoading} onClick={() => setGroupConfirmation("delete")} className="w-full rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50">Delete Group</button>}
-                {groupConfirmation && <div role="alertdialog" aria-modal="true" className="rounded-xl border border-red-500/30 bg-[#211522] p-4 text-left">
-                  <p className="font-semibold text-white">{groupConfirmation === "delete" ? "Delete this group?" : "Leave this group?"}</p>
-                  <p className="mt-1 text-sm text-gray-300">{groupConfirmation === "delete" ? "This removes the group for every member and revokes access to its messages and files. Historical records are retained." : "You will be removed from the group and will no longer receive messages. Other members keep their message history."}</p>
-                  <div className="mt-4 flex justify-end gap-2">
-                    <button disabled={groupActionLoading} onClick={() => setGroupConfirmation(null)} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-white/5">Cancel</button>
-                    <button disabled={groupActionLoading} onClick={() => void confirmGroupAction()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{groupActionLoading ? "Working..." : groupConfirmation === "delete" ? "Confirm delete" : "Confirm leave"}</button>
+                <button
+                  disabled={groupActionLoading}
+                  onClick={() => setGroupConfirmation("leave")}
+                  className="w-full rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                >
+                  Leave Group
+                </button>
+                {isGroupAdmin && (
+                  <button
+                    disabled={groupActionLoading}
+                    onClick={() => setGroupConfirmation("delete")}
+                    className="w-full rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+                  >
+                    Delete Group
+                  </button>
+                )}
+                {groupConfirmation && (
+                  <div
+                    role="alertdialog"
+                    aria-modal="true"
+                    className="rounded-xl border border-red-500/30 bg-[#211522] p-4 text-left"
+                  >
+                    <p className="font-semibold text-white">
+                      {groupConfirmation === "delete"
+                        ? "Delete this group?"
+                        : "Leave this group?"}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-300">
+                      {groupConfirmation === "delete"
+                        ? "This removes the group for every member and revokes access to its messages and files. Historical records are retained."
+                        : "You will be removed from the group and will no longer receive messages. Other members keep their message history."}
+                    </p>
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        disabled={groupActionLoading}
+                        onClick={() => setGroupConfirmation(null)}
+                        className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-white/5"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={groupActionLoading}
+                        onClick={() => void confirmGroupAction()}
+                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {groupActionLoading
+                          ? "Working..."
+                          : groupConfirmation === "delete"
+                            ? "Confirm delete"
+                            : "Confirm leave"}
+                      </button>
+                    </div>
                   </div>
-                </div>}
-                <button onClick={() => setOpenProfile(false)} className="w-full rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white">Close</button>
+                )}
+                <button
+                  onClick={() => setOpenProfile(false)}
+                  className="w-full rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>

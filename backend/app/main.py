@@ -134,15 +134,25 @@ async def websocket_endpoint(websocket: WebSocket):
                     }))
                 continue
 
-            # ================= TYPING =================
+            # ================= PRIVATE TYPING =================
             if event == "typing":
-                await manager.send_personal_message(
-                    parsed["receiverId"],
-                    json.dumps({
-                        "type": "typing",
-                        "senderId": parsed["senderId"]
-                    })
-                )
+                receiver_id = parsed.get("receiverId")
+                active = parsed.get("active", True) is True
+                try:
+                    ObjectId(receiver_id)
+                except Exception:
+                    continue
+                if receiver_id == user_id or not await db.users.find_one({"_id": ObjectId(receiver_id)}, {"_id": 1}):
+                    continue
+                changed = manager.set_private_typing(user_id, receiver_id, websocket, active)
+                if changed:
+                    sender = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1})
+                    await manager.send_personal_message(receiver_id, json.dumps({
+                        "type": "typing", "senderId": user_id,
+                        "receiverId": receiver_id,
+                        "senderName": sender.get("name", "Someone") if sender else "Someone",
+                        "active": active,
+                    }))
                 continue
 
             # ================= SEEN =================
@@ -343,6 +353,17 @@ async def websocket_endpoint(websocket: WebSocket):
         print("Client disconnected")
 
     finally:
+        stopped_receivers = manager.clear_private_typing(user_id, websocket)
+        if stopped_receivers:
+            sender = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1})
+            stop_event = json.dumps({
+                "type": "typing", "senderId": user_id,
+                "senderName": sender.get("name", "Someone") if sender else "Someone",
+                "active": False,
+            })
+            for receiver_id in stopped_receivers:
+                payload = {**json.loads(stop_event), "receiverId": receiver_id}
+                await manager.send_personal_message(receiver_id, json.dumps(payload))
         became_offline = manager.disconnect_user(user_id, websocket)
         if became_offline:
             last_seen = datetime.now(timezone.utc)
@@ -401,12 +422,17 @@ async def websocket_group(
                 break
 
             if event == "group_typing":
-                typing_payload = json.dumps({
-                    "type": "group_typing",
-                    "groupId": room_id,
-                    "senderId": sender_id,
-                })
-                await manager.broadcast_room(room_id, typing_payload)
+                active = parsed.get("active", True) is True
+                changed = manager.set_group_typing(room_id, user_id, websocket, active)
+                if changed:
+                    sender = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1})
+                    typing_payload = json.dumps({
+                        "type": "group_typing", "groupId": room_id,
+                        "senderId": user_id,
+                        "senderName": sender.get("name", "Someone") if sender else "Someone",
+                        "active": active,
+                    })
+                    await manager.broadcast_room(room_id, typing_payload)
                 continue
 
             if event not in ("group_message", "message"):
@@ -474,6 +500,11 @@ async def websocket_group(
         print("Group disconnected")
 
     finally:
+        if manager.clear_group_typing(room_id, user_id, websocket):
+            await manager.broadcast_room(room_id, json.dumps({
+                "type": "group_typing", "groupId": room_id,
+                "senderId": user_id, "active": False,
+            }))
         manager.disconnect_room(room_id, websocket)
 
 

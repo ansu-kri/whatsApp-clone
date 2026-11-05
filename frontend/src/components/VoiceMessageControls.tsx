@@ -7,6 +7,7 @@ type Props = {
   groupId?: string;
   message: string;
   setMessage: (v: string) => void;
+  onBeforeSend?: () => void;
 };
 const fmt = (n: number) =>
   `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
@@ -17,6 +18,7 @@ export default function VoiceMessageControls({
   groupId,
   message,
   setMessage,
+  onBeforeSend,
 }: Props) {
   const speechRec = useRef<any>(null),
     rec = useRef<MediaRecorder | null>(null),
@@ -128,6 +130,7 @@ export default function VoiceMessageControls({
         }),
         P,
       );
+      onBeforeSend?.();
       socket.send(
         JSON.stringify({
           type: groupId ? "group_message" : "message",

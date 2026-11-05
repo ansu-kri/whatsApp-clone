@@ -3,7 +3,7 @@ import type { ChatUser, ChatMessage } from "./types";
 import ChatHeader from "./ChatHeader";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
-import { getSocket, sendSocketMessage } from "@/socket/socket";
+import { subscribePrivateSocket, sendSocketMessage } from "@/socket/socket";
 import { useGetMeQuery } from "../app/userApi";
 import {
   useDeleteMessageMutation,
@@ -23,14 +23,13 @@ type Props = {
 export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(
     null,
   );
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const socketRef = useRef<WebSocket | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meRef = useRef<any>(null);
 
@@ -44,21 +43,22 @@ export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
 
   useEffect(() => {
     setMessage("");
+    setTypingUser(null);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
   }, [user.id]);
 
   const { data: oldMessages } = useGetMessageQuery(
     me && user ? { senderId: me.id, receiverId: user.id } : skipToken,
   );
 
-  // ================= SOCKET INIT =================
+  // All direct chats share the authenticated application socket.
   useEffect(() => {
     if (!me?.id) return;
-    if (socketRef.current) return;
-
-    socketRef.current = getSocket(me.id);
-  }, [me]);
-
-  const socket = socketRef.current;
+    return subscribePrivateSocket(me.id, setSocket);
+  }, [me?.id]);
 
   // ================= LOAD OLD MESSAGES =================
   useEffect(() => {
@@ -114,23 +114,6 @@ export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
 
     const handleMessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
-
-      // ONLINE USERS
-      if (data.type === "online_list") {
-        setOnlineUsers(data.users || []);
-      }
-
-      // USER ONLINE
-      if (data.type === "user_online") {
-        setOnlineUsers((prev) =>
-          prev.includes(data.userId) ? prev : [...prev, data.userId],
-        );
-      }
-
-      // USER OFFLINE
-      if (data.type === "user_offline") {
-        setOnlineUsers((prev) => prev.filter((id) => id !== data.userId));
-      }
 
       // ================= NEW MESSAGE =================
       if (data.type === "message") {
@@ -246,17 +229,22 @@ export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
         );
       }
 
-      // TYPING
-      if (data.type === "typing") {
-        setTypingUser(data.senderId);
-
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
-
-        typingTimeoutRef.current = setTimeout(() => {
+      // Private typing is scoped to this conversation and receiver account.
+      if (
+        data.type === "typing" &&
+        data.senderId === user.id &&
+        data.receiverId === meRef.current?.id
+      ) {
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        if (data.active) {
+          setTypingUser(data.senderName || user.name);
+          typingTimeoutRef.current = setTimeout(
+            () => setTypingUser(null),
+            3500,
+          );
+        } else {
           setTypingUser(null);
-        }, 1200);
+        }
       }
 
       // ================= SEEN UPDATE (FIXED) =================
@@ -283,7 +271,7 @@ export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
     return () => {
       socket.removeEventListener("message", handleMessage);
     };
-  }, [socket, user]);
+  }, [socket, user.id, user.name]);
 
   // ================= AUTO SCROLL =================
   useEffect(() => {
@@ -360,7 +348,8 @@ export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
       <div className="shadow-sm">
         <ChatHeader
           user={user}
-          isOnline={onlineUsers.includes(user.id)}
+          isOnline={user.isOnline}
+          typingText={typingUser ? `${typingUser} is typing...` : undefined}
           onBack={onBack}
         />
       </div>
@@ -388,16 +377,6 @@ export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
             </div>
           ))}
         </div>
-
-        {/* TYPING */}
-        {typingUser === user.id && (
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow w-fit">
-            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
-            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></span>
-            <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-300"></span>
-            <p className="text-sm text-gray-500">typing...</p>
-          </div>
-        )}
 
         <div ref={bottomRef} />
       </div>

@@ -9,7 +9,7 @@ import { useDispatch, useSelector } from "react-redux";
 import apiSlice from "@/app/api";
 import type { Group } from "../components/Sidebar";
 import GroupChatWindow from "@/components/GroupChatWindow";
-import { getSocket } from "@/socket/socket";
+import { subscribePrivateSocket } from "@/socket/socket";
 import toast from "react-hot-toast";
 
 export default function Chat() {
@@ -39,7 +39,9 @@ export default function Chat() {
 
   useEffect(() => {
     if (!userId) return;
-    const socket = getSocket(userId);
+    let currentSocket: WebSocket | null = null;
+    let idleTimer: number | undefined;
+
     const onMessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
       if (data.type === "online_list") setOnlineUsers(data.users || []);
@@ -56,44 +58,66 @@ export default function Chat() {
         setLiveLastSeen((old) => ({ ...old, [data.userId]: data.lastSeen }));
       if (data.type === "group_members_updated") {
         dispatch(apiSlice.util.invalidateTags(["Groups"]));
-        if (data.group?.id) setSelectedGroup((current) => {
-          if (current?.id !== data.group.id) return current;
-          return data.group.members?.some((member: { id: string }) => member.id === userId) ? data.group : null;
-        });
+        if (data.group?.id)
+          setSelectedGroup((current) => {
+            if (current?.id !== data.group.id) return current;
+            return data.group.members?.some(
+              (member: { id: string }) => member.id === userId,
+            )
+              ? data.group
+              : null;
+          });
       }
-      if (data.type === "group_system_event" && data.event === "member_removed" && data.memberId === userId) {
+      if (
+        data.type === "group_system_event" &&
+        data.event === "member_removed" &&
+        data.memberId === userId
+      )
         toast.error("You were removed from a group.");
-      }
       if (data.type === "group_deleted") {
         dispatch(apiSlice.util.invalidateTags(["Groups"]));
-        if (data.deletedBy !== userId) toast("A group you belong to was deleted.");
-        setSelectedGroup((current) => current?.id === data.groupId ? null : current);
+        if (data.deletedBy !== userId)
+          toast("A group you belong to was deleted.");
+        setSelectedGroup((current) =>
+          current?.id === data.groupId ? null : current,
+        );
       }
     };
-    socket.addEventListener("message", onMessage);
-    let idleTimer: number;
-    const markInactive = () => {
-      if (socket.readyState === WebSocket.OPEN)
-        socket.send(JSON.stringify({ type: "inactive" }));
-    };
-    const activity = () => {
-      if (socket.readyState === WebSocket.OPEN)
-        socket.send(JSON.stringify({ type: "activity" }));
+
+    const sendActivity = () => {
+      if (currentSocket?.readyState === WebSocket.OPEN)
+        currentSocket.send(JSON.stringify({ type: "activity" }));
       window.clearTimeout(idleTimer);
-      idleTimer = window.setTimeout(markInactive, 5 * 60_000);
+      idleTimer = window.setTimeout(() => {
+        if (currentSocket?.readyState === WebSocket.OPEN)
+          currentSocket.send(JSON.stringify({ type: "inactive" }));
+      }, 5 * 60_000);
     };
-    activity();
-    window.addEventListener("focus", activity);
-    window.addEventListener("pointerdown", activity);
-    window.addEventListener("keydown", activity);
-    window.addEventListener("touchstart", activity);
+
+    const bindSocket = (socket: WebSocket) => {
+      if (currentSocket === socket) return;
+      currentSocket?.removeEventListener("message", onMessage);
+      currentSocket?.removeEventListener("open", sendActivity);
+      currentSocket = socket;
+      socket.addEventListener("message", onMessage);
+      socket.addEventListener("open", sendActivity);
+      if (socket.readyState === WebSocket.OPEN) sendActivity();
+    };
+
+    const unsubscribe = subscribePrivateSocket(userId, bindSocket);
+    window.addEventListener("focus", sendActivity);
+    window.addEventListener("pointerdown", sendActivity);
+    window.addEventListener("keydown", sendActivity);
+    window.addEventListener("touchstart", sendActivity);
     return () => {
-      socket.removeEventListener("message", onMessage);
+      unsubscribe();
+      currentSocket?.removeEventListener("message", onMessage);
+      currentSocket?.removeEventListener("open", sendActivity);
       window.clearTimeout(idleTimer);
-      window.removeEventListener("focus", activity);
-      window.removeEventListener("pointerdown", activity);
-      window.removeEventListener("keydown", activity);
-      window.removeEventListener("touchstart", activity);
+      window.removeEventListener("focus", sendActivity);
+      window.removeEventListener("pointerdown", sendActivity);
+      window.removeEventListener("keydown", sendActivity);
+      window.removeEventListener("touchstart", sendActivity);
     };
   }, [userId, dispatch]);
 
@@ -114,6 +138,11 @@ export default function Chat() {
 
     [apiUsers, onlineUsers, recentMessages, liveLastSeen],
   );
+
+  const activeSelectedUser = selectedUser
+    ? users.find((candidate) => candidate.id === selectedUser.id) ||
+      selectedUser
+    : null;
 
   useEffect(() => {
     if (users.length > 0 && !selectedUser) {
@@ -159,12 +188,13 @@ export default function Chat() {
         {selectedUser ? (
           <ChatWindow
             key={selectedUser.id}
-            user={selectedUser}
+            user={activeSelectedUser || selectedUser}
             onBack={() => setSelectedUser(null)}
             setRecentMessages={setRecentMessages}
           />
         ) : selectedGroup ? (
           <GroupChatWindow
+            key={selectedGroup.id}
             group={selectedGroup}
             users={users}
             onBack={() => setSelectedGroup(null)}

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { uploadMedia } from "../app/uploadMedia";
 import VoiceMessageControls from "./VoiceMessageControls";
 // import API from "../app/api";
@@ -20,7 +20,28 @@ export default function MessageInput({
   meId,
   receiverId,
 }: Props) {
-  const typingCooldownRef = useRef(false);
+  const typingActiveRef = useRef(false);
+  const typingStartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopTyping = useCallback(() => {
+    if (typingStartRef.current) clearTimeout(typingStartRef.current);
+    if (typingStopRef.current) clearTimeout(typingStopRef.current);
+    typingStartRef.current = null;
+    typingStopRef.current = null;
+    if (
+      typingActiveRef.current &&
+      socket?.readyState === WebSocket.OPEN &&
+      receiverId
+    ) {
+      socket.send(
+        JSON.stringify({ type: "typing", receiverId, active: false }),
+      );
+    }
+    typingActiveRef.current = false;
+  }, [socket, receiverId]);
+
+  useEffect(() => () => stopTyping(), [stopTyping]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -28,24 +49,26 @@ export default function MessageInput({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState("");
 
-  const handleTyping = () => {
-    if (!socket || !meId || !receiverId) return;
-    if (socket.readyState !== WebSocket.OPEN) return;
-    if (typingCooldownRef.current) return;
-
-    typingCooldownRef.current = true;
-
-    socket.send(
-      JSON.stringify({
-        type: "typing",
-        senderId: meId,
-        receiverId,
-      }),
-    );
-
-    setTimeout(() => {
-      typingCooldownRef.current = false;
-    }, 1500);
+  const handleTyping = (value: string) => {
+    if (!value.trim()) {
+      stopTyping();
+      return;
+    }
+    if (!socket || !meId || !receiverId || socket.readyState !== WebSocket.OPEN)
+      return;
+    if (!typingActiveRef.current && !typingStartRef.current) {
+      typingStartRef.current = setTimeout(() => {
+        typingStartRef.current = null;
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({ type: "typing", receiverId, active: true }),
+          );
+          typingActiveRef.current = true;
+        }
+      }, 200);
+    }
+    if (typingStopRef.current) clearTimeout(typingStopRef.current);
+    typingStopRef.current = setTimeout(stopTyping, 1600);
   };
 
   const handleFilePick = () => {
@@ -91,6 +114,7 @@ export default function MessageInput({
           fileName: uploaded.fileName,
         }),
       );
+      stopTyping();
       setUploadProgress(null);
     } catch (error) {
       setUploadProgress(null);
@@ -138,6 +162,7 @@ export default function MessageInput({
             receiverId={receiverId}
             message={message}
             setMessage={setMessage}
+            onBeforeSend={stopTyping}
           />
         </div>
 
@@ -145,17 +170,23 @@ export default function MessageInput({
           value={message}
           onChange={(e) => {
             setMessage(e.target.value);
-            handleTyping();
+            handleTyping(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") onSend();
+            if (e.key === "Enter") {
+              stopTyping();
+              onSend();
+            }
           }}
           className="flex-1 bg-transparent outline-none text-gray-700 placeholder:text-gray-400 px-2 py-2"
           placeholder="Type a message..."
         />
 
         <button
-          onClick={onSend}
+          onClick={() => {
+            stopTyping();
+            onSend();
+          }}
           className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 active:scale-95 transition text-white px-4 sm:px-6 py-2 rounded-xl shadow-md font-medium"
         >
           Send
