@@ -19,6 +19,10 @@ export interface User {
 
 export const messageApis = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
+        markAllRead: builder.mutation<{ updated: number }, void>({
+            query: () => ({ url: "/api/messages/read-all", method: "PATCH" }),
+            invalidatesTags: ["User", "Messages"],
+        }),
         //Get messages between two users
         getMessage: builder.query<
         Message[],
@@ -55,4 +59,4 @@ export const messageApis = apiSlice.injectEndpoints({
     }),
 });
 
-export const { useGetMessageQuery, useEditMessageMutation, useDeleteMessageMutation } = messageApis;
+export const { useGetMessageQuery, useEditMessageMutation, useDeleteMessageMutation, useMarkAllReadMutation } = messageApis;

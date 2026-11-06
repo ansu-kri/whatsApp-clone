@@ -64,6 +64,14 @@ async def get_users(payload: dict = Depends(verify_token)):
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid user session")
     users = []
+    unread_counts = {}
+    async for item in db.messages.aggregate([
+        {"$match": {"receiverId": str(current_user_id), "seen": {"$ne": True}}},
+        {"$group": {"_id": "$senderId", "count": {"$sum": 1}}},
+    ]):
+        unread_counts[item["_id"]] = item["count"]
     async for user in db.users.find({"_id": {"$ne": current_user_id}}):
-        users.append(_serialize_user(user))
+        serialized = _serialize_user(user)
+        serialized["unreadCount"] = unread_counts.get(serialized["id"], 0)
+        users.append(serialized)
     return users

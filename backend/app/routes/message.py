@@ -8,6 +8,18 @@ router = APIRouter(
     dependencies=[Depends(verify_token)]
 )
 
+@router.patch("/read-all")
+async def mark_all_read(payload: dict = Depends(verify_token)):
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user session")
+    result = await db.messages.update_many(
+        {"receiverId": user_id, "seen": {"$ne": True}},
+        {"$set": {"seen": True, "status": "seen"}},
+    )
+    return {"updated": result.modified_count}
+
+
 @router.get("/{senderId}/{receiverId}")
 async def get_messages(
     senderId: str,

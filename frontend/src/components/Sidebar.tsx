@@ -1,9 +1,31 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatUser } from "./types";
-import { MessageSquare, Plus, Users } from "lucide-react";
+import {
+  CheckSquare,
+  CircleDot,
+  Image,
+  LogOut,
+  LockKeyhole,
+  MessageCircle,
+  MoreHorizontal,
+  Phone,
+  Plus,
+  Search,
+  Sparkles,
+  Star,
+  UserPlus,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import GroupAvatar from "./GroupAvatar";
 import type { ChatMessage } from "./types";
 import UserAvatar from "./UserAvatar";
+import { useGetMeQuery } from "../app/userApi";
+import { useLogoutMutation } from "../app/auth/authApi";
+import { useMarkAllReadMutation } from "../app/messageApi";
+import { useNavigate } from "react-router-dom";
+import AccountModal from "./AccountModal";
+
 export interface Group {
   id: string;
   name: string;
@@ -27,6 +49,39 @@ type Props = {
   onCreateGroup: () => void;
 };
 
+type NavItemProps = {
+  label: string;
+  active?: boolean;
+  badge?: number;
+  children: React.ReactNode;
+  onClick?: () => void;
+};
+
+function NavItem({
+  label,
+  active = false,
+  badge = 0,
+  children,
+  onClick,
+}: NavItemProps) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`relative grid h-11 w-11 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 ${active ? "bg-[#e9e9e9] text-[#111b21]" : "text-[#54656f] hover:bg-[#eaeaea] hover:text-[#111b21]"}`}
+    >
+      {children}
+      {badge > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#25d366] px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-[#f7f7f7]">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function Sidebar({
   users,
   groups,
@@ -39,159 +94,386 @@ export default function Sidebar({
   onCreateGroup,
 }: Props) {
   const [search, setSearch] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedChats, setSelectedChats] = useState<string[]>([]);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { data: me } = useGetMeQuery();
+  const [logout] = useLogoutMutation();
+  const [markAllRead] = useMarkAllReadMutation();
 
-  const filteredUsers = useMemo(() => {
-    return users.filter((user) =>
-      user.name.toLowerCase().includes(search.toLowerCase()),
-    );
-  }, [users, search]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      if (
+        event.target instanceof Node &&
+        !menuRef.current?.contains(event.target)
+      )
+        setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
 
-  const filteredGroups = useMemo(() => {
-    return groups.filter((group) =>
-      group.name.toLowerCase().includes(search.toLowerCase()),
+  const toggleChatSelection = (id: string) =>
+    setSelectedChats((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
     );
-  }, [groups, search]);
+  const handleLogout = async () => {
+    try {
+      await logout().unwrap();
+    } finally {
+      navigate("/", { replace: true });
+    }
+  };
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((user) =>
+        user.name.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [users, search],
+  );
+  const filteredGroups = useMemo(
+    () =>
+      groups.filter((group) =>
+        group.name.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [groups, search],
+  );
+  const unreadCount = users.reduce(
+    (total, user) => total + (user.unreadCount || 0),
+    0,
+  );
 
   return (
-    <aside className="w-full sm:w-[340px] h-screen sm:relative fixed sm:static inset-y-0 left-0 bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] border-r border-white/10 flex flex-col z-40">
-      {/* HEADER */}
-      <div className="p-5 border-b border-white/10">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-white">Chatty</h1>
-          <button
-            onClick={onCreateGroup}
-            className="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 transition flex items-center justify-center text-white shadow-lg shadow-purple-500/20"
-          >
-            <Plus size={18} />
-          </button>
-        </div>
-        {/* SEARCH */}
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={
-            activeTab === "chats" ? "Search users..." : "Search groups..."
-          }
-          className="w-full bg-[#1d1729] text-white placeholder:text-gray-500 px-4 py-3 rounded-xl outline-none border border-transparent focus:border-purple-500 transition-all"
-        />
-        {/* TABS */}
-        <div className="mt-4 flex bg-[#171122] rounded-xl p-1">
-          <button
+    <aside className="flex h-screen w-fit shrink-0 bg-white text-[#111b21] ">
+      {/* bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] border-r border-white/10 flex flex-col z-40 */}
+      <nav
+        aria-label="Main navigation"
+        className="z-10 flex h-full w-16 shrink-0 flex-col items-center border-r border-[#e9edef] bg-[#f7f7f7] py-3 sm:w-[68px]"
+      >
+        <div className="flex flex-col items-center gap-1.5">
+          <NavItem
+            label="Chats"
+            active
+            badge={unreadCount}
             onClick={() => onTabChange("chats")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition ${
-              activeTab === "chats"
-                ? "bg-purple-600 text-white"
-                : "text-gray-400 hover:text-white"
-            }`}
           >
-            <MessageSquare size={16} />
-            Chats
-          </button>
-          <button
+            <MessageCircle size={23} strokeWidth={2.3} />
+          </NavItem>
+          <NavItem label="Calls">
+            <Phone size={22} strokeWidth={2.1} />
+          </NavItem>
+          <NavItem label="Updates">
+            <CircleDot size={22} strokeWidth={2.1} />
+          </NavItem>
+          <NavItem
+            label="Communities"
+            active={activeTab === "groups"}
             onClick={() => onTabChange("groups")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition ${
-              activeTab === "groups"
-                ? "bg-purple-600 text-white"
-                : "text-gray-400 hover:text-white"
-            }`}
           >
-            <Users size={16} />
-            Groups
+            <UsersRound size={23} strokeWidth={2.1} />
+          </NavItem>
+          <NavItem label="Channels">
+            <Users size={22} strokeWidth={2.1} />
+          </NavItem>
+        </div>
+        <div className="my-4 w-9 border-t border-[#d9dddf]" />
+        <NavItem label="Explore features">
+          <Sparkles size={22} strokeWidth={2.1} className="text-[#a855f7]" />
+        </NavItem>
+        <div className="mt-auto flex flex-col items-center gap-2">
+          <NavItem label="Media">
+            <Image size={22} strokeWidth={2.1} />
+          </NavItem>
+          <button
+            type="button"
+            aria-label="Open profile and settings"
+            title="Profile and settings"
+            onClick={() => setProfileOpen(true)}
+            className="grid h-11 w-11 place-items-center rounded-full p-1 transition-colors hover:bg-[#eaeaea] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+          >
+            <UserAvatar
+              userId={me?.id}
+              name={me?.name || "User"}
+              imageUrl={me?.avatar}
+              className="h-9 w-9 rounded-full object-cover"
+            />
           </button>
         </div>
-      </div>
-      {/* LIST */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#3b2d56]">
-        {activeTab === "chats" &&
-          filteredUsers.map((user) => {
-            const isActive = selectedUser?.id === user.id;
-            return (
-              <button
-                key={user.id}
-                onClick={() => onSelectUser(user)}
-                className={`w-full flex items-center gap-4 px-5 py-4 transition-all duration-200 border-l-4 ${
-                  isActive
-                    ? "bg-[#1f1830] border-purple-500"
-                    : "border-transparent hover:bg-[#191325]"
-                }`}
-              >
-                <div className="relative flex-shrink-0">
-                  <UserAvatar
-                    userId={user.id}
-                    name={user.name}
-                    imageUrl={user.avatar}
-                    className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
-                  />
-                  {user.isOnline && (
-                    <span className="absolute bottom-0 right-0 w-4 h-4 bg-green-400 border-2 border-[#120d1b] rounded-full" />
-                  )}
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-semibold text-white truncate">
-                      {user.name}
-                    </h3>
+      </nav>
 
-                    <span className="text-xs text-gray-500">
-                      {user.lastChatTime}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <p
-                      className={`text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[220px] ${
-                        user.typing ? "text-green-400 italic" : "text-gray-400"
-                      }`}
+      <section
+        aria-label="Chats and groups"
+        className="flex h-full min-h-0 w-[min(360px,calc(100vw-64px))] flex-col border-r border-[#e9edef] bg-white sm:w-[340px]"
+      >
+        <header className="border-b border-[#e9edef] px-5 pb-4 pt-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h1 className="text-[21px] font-semibold tracking-tight text-[#00a884]">
+              WhatsApp
+            </h1>
+            <div className="flex items-center gap-1">
+              <div className="relative" ref={menuRef}>
+                <button
+                  type="button"
+                  title="More options"
+                  aria-label="More options"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                  className="grid h-9 w-9 place-items-center rounded-full text-[#54656f] hover:bg-[#f0f2f5]"
+                >
+                  <MoreHorizontal size={21} />
+                </button>
+                {menuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-11 z-50 w-[190px] rounded-2xl bg-white p-2 text-[#111b21] shadow-[0_8px_24px_rgba(11,20,26,0.18)] ring-1 ring-black/5"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onCreateGroup();
+                      }}
+                      className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm hover:bg-[#f5f6f6]"
                     >
-                      {user.typing
-                        ? "typing..."
-                        : user.recentMessage || "No messages yet"}
-                    </p>
-
-                    {!!user.unreadCount && (
-                      <span className="ml-2 min-w-[20px] h-5 px-1 rounded-full bg-green-500 text-white text-[11px] flex items-center justify-center font-semibold">
-                        {user.unreadCount}
-                      </span>
-                    )}
+                      <UserPlus size={17} />
+                      New group
+                    </button>
+                    <button
+                      role="menuitem"
+                      disabled
+                      title="Starred messages are not supported yet"
+                      className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm text-[#667781] disabled:cursor-not-allowed"
+                    >
+                      <Star size={17} />
+                      Starred messages
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setSelectMode(true);
+                        setSelectedChats([]);
+                        setMenuOpen(false);
+                      }}
+                      className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm hover:bg-[#f5f6f6]"
+                    >
+                      <CheckSquare size={17} />
+                      Select chats
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={async () => {
+                        setMenuOpen(false);
+                        try {
+                          await markAllRead().unwrap();
+                        } catch {
+                          /* RTK Query reports request errors. */
+                        }
+                      }}
+                      className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm hover:bg-[#f5f6f6]"
+                    >
+                      <MessageCircle size={17} />
+                      Mark all as read
+                    </button>
+                    <div className="my-1.5 border-t border-[#e9edef]" />
+                    <button
+                      role="menuitem"
+                      disabled
+                      title="App lock is not configured in this app"
+                      className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm text-[#667781] disabled:cursor-not-allowed"
+                    >
+                      <LockKeyhole size={17} />
+                      App lock
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void handleLogout();
+                      }}
+                      className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm hover:bg-[#f5f6f6]"
+                    >
+                      <LogOut size={17} />
+                      Log out
+                    </button>
                   </div>
-                </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onCreateGroup}
+                title="New group"
+                aria-label="New group"
+                className="grid h-9 w-9 place-items-center rounded-full bg-[#00a884] text-white transition-colors hover:bg-[#008f72]"
+              >
+                <Plus size={20} />
               </button>
-            );
-          })}
-        {activeTab === "groups" &&
-          filteredGroups.map((group) => {
-            const isActive = selectedGroup?.id === group.id;
-            return (
+            </div>
+          </div>
+          <label className="flex h-10 items-center gap-3 rounded-lg bg-[#f0f2f5] px-3 text-[#667781] focus-within:ring-2 focus-within:ring-[#00a884]/40">
+            <Search size={18} />
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={
+                activeTab === "chats"
+                  ? "Search or start a new chat"
+                  : "Search groups"
+              }
+              className="min-w-0 flex-1 bg-transparent text-sm text-[#111b21] outline-none placeholder:text-[#667781]"
+            />
+          </label>
+          {selectMode ? (
+            <div className="mt-3 flex items-center justify-between text-sm text-[#54656f]">
+              <span>{selectedChats.length} selected</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectMode(false);
+                  setSelectedChats([]);
+                }}
+                className="rounded-full px-3 py-1 text-[#00a884] hover:bg-[#f0f2f5]"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => onTabChange("chats")}
+                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${activeTab === "chats" ? "border-[#d9fdd3] bg-[#d9fdd3] text-[#075e54]" : "border-[#e9edef] text-[#54656f] hover:bg-[#f7f8fa]"}`}
+              >
+                Chats
+              </button>
+              <button
+                type="button"
+                onClick={() => onTabChange("groups")}
+                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${activeTab === "groups" ? "border-[#d9fdd3] bg-[#d9fdd3] text-[#075e54]" : "border-[#e9edef] text-[#54656f] hover:bg-[#f7f8fa]"}`}
+              >
+                Groups
+              </button>
+            </div>
+          )}
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {activeTab === "chats" &&
+            filteredUsers.map((user) => {
+              const isActive = selectedUser?.id === user.id;
+              return (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() =>
+                    selectMode
+                      ? toggleChatSelection(user.id)
+                      : onSelectUser(user)
+                  }
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${isActive ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"}`}
+                >
+                  <span className="relative shrink-0">
+                    <UserAvatar
+                      userId={user.id}
+                      name={user.name}
+                      imageUrl={user.avatar}
+                      className="h-[52px] w-[52px] rounded-full object-cover"
+                    />
+                    {user.isOnline && (
+                      <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#25d366]" />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 border-b border-[#f0f2f5] pb-3 pt-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[16px] font-medium text-[#111b21]">
+                        {user.name}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-[#667781]">
+                        {user.lastChatTime}
+                      </span>
+                    </span>
+                    <span className="mt-1 flex items-center justify-between gap-2">
+                      <span
+                        className={`truncate text-[13px] ${user.typing ? "italic text-[#00a884]" : "text-[#667781]"}`}
+                      >
+                        {user.typing
+                          ? "typing..."
+                          : user.recentMessage || "No messages yet"}
+                      </span>
+                      {!!user.unreadCount && (
+                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-semibold text-white">
+                          {user.unreadCount > 99 ? "99+" : user.unreadCount}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          {activeTab === "groups" &&
+            filteredGroups.map((group) => (
               <button
                 key={group.id}
-                onClick={() => onSelectGroup(group)}
-                className={`w-full flex items-center gap-4 px-5 py-4 transition-all duration-200 border-l-4 ${
-                  isActive
-                    ? "bg-[#1f1830] border-purple-500"
-                    : "border-transparent hover:bg-[#191325]"
-                }`}
+                type="button"
+                onClick={() =>
+                  selectMode
+                    ? toggleChatSelection("g-" + group.id)
+                    : onSelectGroup(group)
+                }
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${selectedGroup?.id === group.id ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"}`}
               >
                 <GroupAvatar
                   name={group.name}
                   imageUrl={group.groupImage}
-                  className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
+                  className="h-[52px] w-[52px] shrink-0 rounded-full object-cover"
                 />
-                <div className="flex-1 text-left">
-                  <h3 className="font-semibold text-white truncate">
+                <span className="min-w-0 flex-1 border-b border-[#f0f2f5] pb-3 pt-1">
+                  <span className="block truncate text-[16px] font-medium">
                     {group.name}
-                  </h3>
-
-                  <p className="text-xs text-gray-400 mt-1">
+                  </span>
+                  <span className="mt-1 block text-[13px] text-[#667781]">
                     {group.members.length} members
-                  </p>
-                </div>
+                  </span>
+                </span>
               </button>
-            );
-          })}
-        {activeTab === "groups" && filteredGroups.length === 0 && (
-          <div className="p-6 text-center text-gray-500">No groups found</div>
-        )}
-      </div>
+            ))}
+          {activeTab === "groups" && filteredGroups.length === 0 && (
+            <div className="p-6 text-center text-sm text-[#667781]">
+              No groups found
+            </div>
+          )}
+          {activeTab === "chats" && filteredUsers.length === 0 && (
+            <div className="p-6 text-center text-sm text-[#667781]">
+              No chats found
+            </div>
+          )}
+        </div>
+      </section>
+      <AccountModal
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        user={{
+          id: me?.id,
+          name: me?.name || "",
+          email: me?.email || "",
+          avatar: me?.avatar || "",
+          createdAt: me?.createdAt || "",
+        }}
+      />
     </aside>
   );
 }

@@ -132,7 +132,7 @@ export default function Chat() {
         chats: [],
         isOnline: onlineUsers.includes(user.id),
         typing: false,
-        unreadCount: 0,
+        unreadCount: user.unreadCount || 0,
         lastSeen: liveLastSeen[user.id] || user.lastSeen || "",
       })),
 

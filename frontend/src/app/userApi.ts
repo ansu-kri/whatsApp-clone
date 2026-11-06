@@ -8,6 +8,7 @@ export interface User {
   createdAt?: string;
   lastSeen?: string;
   isOnline?: boolean;
+  unreadCount?: number;
 }
 
 export const userApis = apiSlice.injectEndpoints({
