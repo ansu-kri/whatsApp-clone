@@ -157,8 +157,7 @@ export default function Sidebar({
   );
 
   return (
-    <aside className="flex h-screen w-fit shrink-0 bg-white text-[#111b21] ">
-      {/* bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] border-r border-white/10 flex flex-col z-40 */}
+    <aside className="theme-sidebar flex h-screen w-fit shrink-0 bg-gradient-to-br from-[#20163a] via-[#20163a] to-[#0b0814] border-r border-white/10 text-[#111b21]">
       <nav
         aria-label="Main navigation"
         className="z-10 flex h-full w-16 shrink-0 flex-col items-center border-r border-[#e9edef] bg-[#f7f7f7] py-3 sm:w-[68px]"
@@ -221,7 +220,7 @@ export default function Sidebar({
         <header className="border-b border-[#e9edef] px-5 pb-4 pt-5">
           <div className="mb-4 flex items-center justify-between">
             <h1 className="text-[21px] font-semibold tracking-tight text-[#00a884]">
-              WhatsApp
+              Chatty
             </h1>
             <div className="flex items-center gap-1">
               <div className="relative" ref={menuRef}>
