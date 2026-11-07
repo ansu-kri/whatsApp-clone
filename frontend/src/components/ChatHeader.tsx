@@ -1,6 +1,6 @@
-import type { ChatUser } from "./types";
-import { Settings, LogOut, User, ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+﻿import type { ChatUser } from "./types";
+import { ArrowLeft, BellOff, CheckSquare, LogOut, MoreVertical, Phone, Search, Timer, UserRound, Video } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useLogoutMutation } from "../app/auth/authApi";
 import { useNavigate } from "react-router-dom";
 import AccountModal from "./AccountModal";
@@ -44,6 +44,21 @@ export default function ChatHeader({
 
   const navigate = useNavigate();
   const [openProfile, setOpenProfile] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectMode, setSelectMode] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [disappearing, setDisappearing] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOutside = (event: MouseEvent) => { if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setMenuOpen(false); };
+    const closeEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeEscape);
+    return () => { document.removeEventListener("mousedown", closeOutside); document.removeEventListener("keydown", closeEscape); };
+  }, [menuOpen]);
   const [groupConfirmation, setGroupConfirmation] = useState<
     "leave" | "delete" | null
   >(null);
@@ -112,96 +127,65 @@ export default function ChatHeader({
   return (
     <>
       {/* HEADER */}
-      <div
-        className={`flex items-center justify-between
-        px-4 sm:px-6 py-3 sm:py-4
-        bg-white/5 backdrop-blur-xl
-        border-b border-white/10 shadow-sm
-        transition-all duration-300
-        ${openProfile ? "blur-sm scale-[0.99]" : ""}
-      `}
-      >
-        {/* LEFT */}
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+      <header className="chat-header relative z-30 flex h-16 w-full shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
           {onBack && (
-            <button
-              onClick={onBack}
-              className="sm:hidden p-2 rounded-lg bg-white/5 border border-white/10"
-            >
-              <ArrowLeft size={18} className="text-white" />
+            <button type="button" onClick={onBack} aria-label="Back to chats" className="rounded-full p-2 text-gray-600 transition hover:bg-gray-100 sm:hidden">
+              <ArrowLeft size={20} />
             </button>
           )}
-
-          <div className="relative flex-shrink-0">
-            {type === "group" ? (
-              <GroupAvatar
-                name={group?.name || "Group"}
-                imageUrl={group?.groupImage}
-                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-cyan-400 shadow-lg"
-              />
-            ) : (
-              <UserAvatar
-                userId={user?.id}
-                name={user?.name || "User"}
-                imageUrl={user?.avatar}
-                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-cyan-400 shadow-lg"
-              />
-            )}
-
-            {type === "user" && isOnline && (
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-[#0F172A] rounded-full"></span>
-            )}
-          </div>
-
+          {type === "group" ? (
+            <GroupAvatar name={group?.name || "Group"} imageUrl={group?.groupImage} className="h-10 w-10 shrink-0 rounded-full object-cover" />
+          ) : (
+            <UserAvatar userId={user?.id} name={user?.name || "User"} imageUrl={user?.avatar} className="h-10 w-10 shrink-0 rounded-full object-cover" />
+          )}
           <div className="min-w-0">
-            <h2 className="font-semibold text-white text-base sm:text-lg truncate">
-              {displayName}
-            </h2>
-
-            <p
-              className={`text-xs sm:text-sm ${
-                type === "group"
-                  ? "text-gray-400"
-                  : isOnline
-                    ? "text-green-400"
-                    : "text-gray-400"
-              }`}
-            >
-              {subtitle}
-            </p>
+            <h2 className="truncate text-[15px] font-medium leading-5 text-[#111b21]">{displayName}</h2>
+            <p className={"truncate text-xs leading-4 " + (type === "group" ? "text-gray-500" : isOnline ? "text-green-600" : "text-gray-500")}>{subtitle}</p>
           </div>
         </div>
 
-        {/* RIGHT (UNCHANGED) */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={() => setOpenProfile(true)}
-            className="p-2 sm:p-3 rounded-xl bg-white/5 hover:bg-cyan-500/20 border border-white/10 transition-all duration-300 group"
-          >
-            <User
-              size={18}
-              className="text-gray-300 group-hover:text-cyan-400"
-            />
-          </button>
+        {searchOpen && (
+          <form className="absolute inset-y-0 left-0 z-10 flex w-full items-center gap-3 bg-white px-4 sm:left-1/4 sm:w-1/2"
+            onSubmit={(event) => { event.preventDefault(); const findText = (window as Window & { find?: (text: string) => boolean }).find; if (searchTerm.trim()) findText?.call(window, searchTerm.trim()); }}>
+            <button type="button" onClick={() => { setSearchOpen(false); setSearchTerm(""); }} aria-label="Close search" className="rounded-full p-2 text-gray-600 hover:bg-gray-100">
+              <ArrowLeft size={20} />
+            </button>
+            <input autoFocus value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search in conversation" className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-500" />
+          </form>
+        )}
 
-          <button className="p-2 sm:p-3 rounded-xl bg-white/5 hover:bg-violet-500/20 border border-white/10 transition-all duration-300 group">
-            <Settings
-              size={18}
-              className="text-gray-300 group-hover:text-violet-400"
-            />
-          </button>
-
-          <button
-            onClick={handleLogout}
-            disabled={isLoading}
-            className="p-2 sm:p-3 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 transition-all duration-300 group"
-          >
-            <LogOut size={18} className="text-red-400" />
-          </button>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <button type="button" aria-label="Video call" title="Video call" className="rounded-full p-2.5 text-gray-700 transition hover:bg-gray-100"><Video size={20} strokeWidth={2} /></button>
+          <button type="button" aria-label="Voice call" title="Voice call" className="rounded-full p-2.5 text-gray-700 transition hover:bg-gray-100"><Phone size={20} strokeWidth={2} /></button>
+          <button type="button" aria-label="Search" title="Search" onClick={() => { setSearchOpen(true); setMenuOpen(false); }} className="rounded-full p-2.5 text-gray-700 transition hover:bg-gray-100"><Search size={20} strokeWidth={2} /></button>
+          <div className="relative" ref={menuRef}>
+            <button type="button" aria-label="More options" title="More options" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}
+              className={"rounded-full p-2.5 text-gray-700 transition hover:bg-gray-100 " + (menuOpen ? "bg-gray-100" : "")}>
+              <MoreVertical size={20} strokeWidth={2} />
+            </button>
+            {menuOpen && (
+              <div role="menu" className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-5rem)] w-[min(260px,calc(100vw-1.5rem))] overflow-y-auto rounded-lg bg-white py-2 text-[#3b4a54] shadow-[0_4px_18px_rgba(11,20,26,0.2)] ring-1 ring-black/5">
+                <button role="menuitem" type="button" onClick={() => { setOpenProfile(true); setMenuOpen(false); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm transition hover:bg-gray-100"><UserRound size={18} /><span>Contact info</span></button>
+                <button role="menuitem" type="button" onClick={() => { setSearchOpen(true); setMenuOpen(false); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm transition hover:bg-gray-100"><Search size={18} /><span>Search</span></button>
+                <button role="menuitem" type="button" onClick={() => { setSelectMode((active) => !active); setMenuOpen(false); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm transition hover:bg-gray-100"><CheckSquare size={18} /><span>{selectMode ? "Cancel selection" : "Select messages"}</span></button>
+                <button role="menuitem" type="button" onClick={() => { setMuted((active) => !active); setMenuOpen(false); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm transition hover:bg-gray-100"><BellOff size={18} /><span>{muted ? "Unmute notifications" : "Mute notifications"}</span></button>
+                <button role="menuitem" type="button" onClick={() => { setDisappearing((active) => !active); setMenuOpen(false); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm transition hover:bg-gray-100"><Timer size={18} /><span>Disappearing messages {disappearing ? "· On" : ""}</span></button>
+                {type === "group" && (<>
+                  <div className="my-2 border-t border-gray-200" />
+                  <button role="menuitem" type="button" disabled={groupActionLoading} onClick={() => { setGroupConfirmation("leave"); setMenuOpen(false); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm transition hover:bg-gray-100 disabled:opacity-50"><LogOut size={18} /><span>Leave group</span></button>
+                  {isGroupAdmin && <button role="menuitem" type="button" disabled={groupActionLoading} onClick={() => { setGroupConfirmation("delete"); setMenuOpen(false); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm text-red-600 transition hover:bg-gray-100 disabled:opacity-50"><LogOut size={18} /><span>Delete group</span></button>}
+                </>)}
+                <div className="my-2 border-t border-gray-200" />
+                <button role="menuitem" type="button" disabled={isLoading} onClick={() => { setMenuOpen(false); void handleLogout(); }} className="flex h-10 w-full items-center gap-4 px-4 text-left text-sm text-red-600 transition hover:bg-gray-100 disabled:opacity-50"><LogOut size={18} /><span>Log out</span></button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* PROFILE MODAL (UNCHANGED) */}
+
       {type === "group" ? (
         openProfile && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">

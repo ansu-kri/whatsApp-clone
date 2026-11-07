@@ -158,3 +158,6 @@ body {
 :root[data-theme="dark"] [class~="text-gray-500"] {
   color: #c4bdd2 !important;
 }
+.chat-header { transition: background-color 160ms ease, color 160ms ease; }
+:root[data-theme="dark"] .chat-header { background-color: #20163a !important; border-color: rgb(255 255 255 / .1) !important; }
+:root[data-theme="dark"] [class~="hover:bg-gray-100"]:hover { background-color: rgb(255 255 255 / .08) !important; }
