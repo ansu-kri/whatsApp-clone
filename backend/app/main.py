@@ -10,10 +10,16 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from app.routes.upload import router as uploadRouter
 from app.routes.group import router as groupRouter
+from app.routes.notifications import router as notificationsRouter
 from app.middleware.authMiddleware import SECRET_KEY, ALGORITHM
+from app.utils.notifications import create_notification
 from jose import jwt
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def ensure_notification_indexes():
+    await db.notifications.create_index([("userId", 1), ("eventId", 1)], unique=True)
 
 app.include_router(
     authRouter,
@@ -39,6 +45,8 @@ app.include_router(
     groupRouter,
     prefix="/api/group"
 )
+
+app.include_router(notificationsRouter, prefix="/api/notifications")
 
 origins = [
     "http://localhost:5173"
@@ -157,41 +165,31 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # ================= SEEN =================
             if event == "seen":
-
+                sender_id = parsed.get("senderId")
+                if parsed.get("receiverId") != user_id or not sender_id:
+                    continue
                 messages = await db.messages.find({
-                    "senderId": parsed["senderId"],
-                    "receiverId": parsed["receiverId"],
-                    "seen": False
+                    "senderId": sender_id,
+                    "receiverId": user_id,
+                    "seen": {"$ne": True},
                 }).to_list(None)
-
-                message_ids =[
-                    str(msg["_id"])
-                    for msg in messages
-                ]
-
+                message_ids = [str(msg["_id"]) for msg in messages]
                 await db.messages.update_many(
-                    {
-                        "senderId": parsed["senderId"],
-                        "receiverId": parsed["receiverId"]
-                    },
-                    {
-                        "$set": { 
-                            "seen": True,
-                            "status": "seen" }
-                    }
+                    {"senderId": sender_id, "receiverId": user_id},
+                    {"$set": {"seen": True, "status": "seen"}},
                 )
-
+                await db.notifications.update_many(
+                    {"userId": user_id, "conversationType": "private", "conversationId": sender_id, "read": {"$ne": True}},
+                    {"$set": {"read": True}},
+                )
+                await manager.send_personal_message(user_id, json.dumps({"type": "notifications_read", "conversationId": sender_id}))
                 await manager.send_personal_message(
-                    parsed["senderId"],
-                    json.dumps({
-                        "type": "seen_update",
-                        "messageIds": message_ids,
-                        "from": parsed["receiverId"]
-                    })
+                    sender_id,
+                    json.dumps({"type": "seen_update", "messageIds": message_ids, "from": user_id}),
                 )
-
                 continue
-             # ================= EDIT MESSAGE =================
+
+            # ================= EDIT MESSAGE =================
             if event == "edit_message":
 
                 message_id = parsed["messageId"]
@@ -284,7 +282,15 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # ================= SEND MESSAGE =================
             if event == "message":
-
+                receiver_id = parsed.get("receiverId")
+                if parsed.get("senderId") != user_id or not receiver_id or receiver_id == user_id:
+                    continue
+                try:
+                    receiver_object_id = ObjectId(receiver_id)
+                except Exception:
+                    continue
+                if not await db.users.find_one({"_id": receiver_object_id}, {"_id": 1}):
+                    continue
                 #prevent empty message
                 message_text = (
                     parsed.get("message") or ""
@@ -304,11 +310,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 now = datetime.now(timezone.utc)    
   
-                receiver_online = parsed["receiverId"] in manager.active_connections
+                receiver_online = receiver_id in manager.active_connections
 
                 message_doc = {
                     "senderId": parsed["senderId"],
-                    "receiverId": parsed["receiverId"],
+                    "receiverId": receiver_id,
                     "message": message_text,
                     "image": image_url,
                     "attachmentUrl": attachment_url,
@@ -344,9 +350,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
             payload = json.dumps(response, default=str)
 
-            await manager.send_personal_message(parsed["receiverId"], payload)
-            await manager.send_personal_message(parsed["senderId"], payload)
-
+            await manager.send_personal_message(receiver_id, payload)
+            await manager.send_personal_message(user_id, payload)
+            await create_notification(
+                receiver_id, user_id, f"private_message:{result.inserted_id}",
+                message_text or (file_name or "Shared a file"), "private", user_id,
+            )
             continue
 
     except WebSocketDisconnect:
@@ -495,6 +504,10 @@ async def websocket_group(
             for member_id in member_ids:
                 if member_id != sender_id:
                     await manager.send_personal_message(member_id, payload)
+                    await create_notification(
+                        member_id, sender_id, f"group_message:{result.inserted_id}:{member_id}",
+                        message or (file_name or "Shared a file"), "group", room_id,
+                    )
 
     except WebSocketDisconnect:
         print("Group disconnected")

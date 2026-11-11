@@ -20,6 +20,7 @@ import {
 import GroupAvatar from "./GroupAvatar";
 import type { ChatMessage } from "./types";
 import UserAvatar from "./UserAvatar";
+import NotificationCenter from "./NotificationCenter";
 import { useGetMeQuery } from "../app/userApi";
 import { useLogoutMutation } from "../app/auth/authApi";
 import { useMarkAllReadMutation } from "../app/messageApi";
@@ -163,14 +164,11 @@ export default function Sidebar({
         className="z-10 flex h-full w-16 shrink-0 flex-col items-center border-r border-[#e9edef] bg-[#f7f7f7] py-3 sm:w-[68px]"
       >
         <div className="flex flex-col items-center gap-1.5">
-          <NavItem
-            label="Chats"
-            active
-            badge={unreadCount}
-            onClick={() => onTabChange("chats")}
-          >
-            <MessageCircle size={23} strokeWidth={2.3} />
-          </NavItem>
+          <NotificationCenter
+            active={activeTab === "chats"}
+            unreadChats={unreadCount}
+            onChatClick={() => onTabChange("chats")}
+          />
           <NavItem label="Calls">
             <Phone size={22} strokeWidth={2.1} />
           </NavItem>

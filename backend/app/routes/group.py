@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.database import db
 from app.middleware.authMiddleware import verify_token
 from app.websocket.socket import manager
+from app.utils.notifications import create_notification
 
 router = APIRouter(
     dependencies=[Depends(verify_token)]
@@ -128,6 +129,13 @@ async def _broadcast_group_change(group_id: str, old_members: List[str], group: 
     for user_id in set(old_members + group.get("members", [])):
         await manager.send_personal_message(user_id, update)
         await manager.send_personal_message(user_id, event)
+        actor_id = system_event.get("actorId")
+        if user_id != actor_id:
+            occurred = datetime.now(timezone.utc).isoformat()
+            await create_notification(
+                user_id, actor_id, f"group_activity:{group_id}:{system_event.get('event', 'activity')}:{user_id}:{occurred}",
+                system_event.get("message", "Group activity"), "group", group_id, "activity",
+            )
     return serialized
 
 

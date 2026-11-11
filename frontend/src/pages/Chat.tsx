@@ -1,7 +1,7 @@
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
 import type { ChatUser } from "../components/types";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useGetUsersQuery } from "../app/userApi";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import { useGetGroupsQuery } from "@/app/groupApi";
@@ -11,9 +11,12 @@ import type { Group } from "../components/Sidebar";
 import GroupChatWindow from "@/components/GroupChatWindow";
 import { subscribePrivateSocket } from "@/socket/socket";
 import toast from "react-hot-toast";
+import { API_BASE_URL } from "@/app/api";
+import { useGetNotificationsQuery } from "@/app/notificationApi";
 
 export default function Chat() {
   const { data: apiUsers = [], isLoading } = useGetUsersQuery();
+  const { data: notifications = [] } = useGetNotificationsQuery();
 
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [liveLastSeen, setLiveLastSeen] = useState<Record<string, string>>({});
@@ -37,6 +40,10 @@ export default function Chat() {
   }, [userId, refetch]);
 
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const activeConversationRef = useRef<{ userId: string | null; groupId: string | null }>({ userId: null, groupId: null });
+  useEffect(() => {
+    activeConversationRef.current = { userId: selectedUser?.id || null, groupId: selectedGroup?.id || null };
+  }, [selectedUser?.id, selectedGroup?.id]);
 
   useEffect(() => {
     if (!userId) return;
@@ -45,6 +52,30 @@ export default function Chat() {
 
     const onMessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
+      if (data.type === "notification" && data.notification?.id) {
+        const notification = data.notification;
+        dispatch(apiSlice.util.invalidateTags(["Notifications"]));
+        if (notification.message) setRecentMessages((current) => ({ ...current, [notification.conversationId]: notification.message }));
+
+        const active = activeConversationRef.current;
+        const viewingConversation = notification.conversationType === "group"
+          ? active.groupId === notification.conversationId
+          : active.userId === notification.conversationId;
+        if (viewingConversation && document.visibilityState === "visible" && document.hasFocus()) {
+          const token = localStorage.getItem("token");
+          void fetch(`${API_BASE_URL}/api/notifications/${notification.id}/read`, {
+            method: "PATCH",
+            headers: token ? { authorization: `Bearer ${token}` } : {},
+          }).finally(() => dispatch(apiSlice.util.invalidateTags(["Notifications"])));
+        } else if ((document.visibilityState !== "visible" || !document.hasFocus()) && "Notification" in window && Notification.permission === "granted") {
+          const browserNotification = new Notification(notification.senderName || "New chat activity", {
+            body: notification.message || "You have a new notification",
+            tag: notification.eventId || notification.id,
+          });
+          browserNotification.onclick = () => { window.focus(); browserNotification.close(); };
+        }
+      }
+      if (data.type === "notifications_read") dispatch(apiSlice.util.invalidateTags(["Notifications"]));
       if (data.type === "online_list") setOnlineUsers(data.users || []);
       if (data.type === "user_online")
         setOnlineUsers((old) =>
@@ -122,6 +153,16 @@ export default function Chat() {
     };
   }, [userId, dispatch]);
 
+  const notificationPreviews = useMemo(() => {
+    const previews: Record<string, string> = {};
+    for (const notification of notifications) {
+      if (notification.type === "message" && notification.message && !previews[notification.conversationId]) {
+        previews[notification.conversationId] = notification.message;
+      }
+    }
+    return previews;
+  }, [notifications]);
+
   const users: ChatUser[] = useMemo(
     () =>
       apiUsers.map((user) => ({
@@ -130,7 +171,7 @@ export default function Chat() {
         email: user.email,
         phone: user.phone,
         avatar: user.avatar || "",
-        recentMessage: recentMessages[user.id] || "",
+        recentMessage: recentMessages[user.id] || notificationPreviews[user.id] || "",
         lastChatTime: "",
         chats: [],
         isOnline: onlineUsers.includes(user.id),
@@ -139,7 +180,7 @@ export default function Chat() {
         lastSeen: liveLastSeen[user.id] || user.lastSeen || "",
       })),
 
-    [apiUsers, onlineUsers, recentMessages, liveLastSeen],
+    [apiUsers, onlineUsers, recentMessages, notificationPreviews, liveLastSeen],
   );
 
   const activeSelectedUser = selectedUser
