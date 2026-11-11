@@ -19,7 +19,7 @@ def _serialize_user(user: dict) -> dict:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
     return {
         "id": str(user["_id"]), "name": user.get("name", ""),
-        "email": user.get("email", ""), "avatar": user.get("avatar") or "",
+        "email": user.get("email", ""), "phone": user.get("phone") or user.get("phoneNumber") or "", "avatar": user.get("avatar") or "",
         "createdAt": user["createdAt"].isoformat() if user.get("createdAt") else None,
         "lastSeen": last_seen.isoformat().replace("+00:00", "Z") if last_seen else None,
         "isOnline": bool(user.get("isOnline", False)),

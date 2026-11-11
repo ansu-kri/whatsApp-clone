@@ -161,3 +161,22 @@ body {
 .chat-header { transition: background-color 160ms ease, color 160ms ease; }
 :root[data-theme="dark"] .chat-header { background-color: #20163a !important; border-color: rgb(255 255 255 / .1) !important; }
 :root[data-theme="dark"] [class~="hover:bg-gray-100"]:hover { background-color: rgb(255 255 255 / .08) !important; }
+
+/* Keep the header actions menu legible against the dark theme surface. */
+:root[data-theme="dark"] .chat-menu {
+  color: #e5e7eb !important;
+  background-color: #241d34 !important;
+  --tw-ring-color: rgb(255 255 255 / 0.12);
+}
+:root[data-theme="dark"] .chat-menu [role="menuitem"] {
+  color: #e5e7eb;
+}
+:root[data-theme="dark"] .chat-menu [role="menuitem"].text-red-600 {
+  color: #fda4af;
+}
+:root[data-theme="dark"] .chat-menu [role="menuitem"]:hover {
+  background-color: rgb(255 255 255 / 0.1) !important;
+}
+:root[data-theme="dark"] .chat-menu .border-gray-200 {
+  border-color: rgb(255 255 255 / 0.12) !important;
+}

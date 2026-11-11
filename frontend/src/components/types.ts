@@ -18,6 +18,8 @@ export type ChatMessage = {
 export type ChatUser = {
   id: string;
   name: string;
+  email?: string;
+  phone?: string;
   avatar: string;
   recentMessage: string;
   lastChatTime: string;

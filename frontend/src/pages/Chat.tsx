@@ -18,6 +18,7 @@ export default function Chat() {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [liveLastSeen, setLiveLastSeen] = useState<Record<string, string>>({});
   const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
+  const [contactInfoOpen, setContactInfoOpen] = useState(false);
   const [recentMessages, setRecentMessages] = useState<Record<string, string>>(
     {},
   );
@@ -126,6 +127,8 @@ export default function Chat() {
       apiUsers.map((user) => ({
         id: user.id,
         name: user.name,
+        email: user.email,
+        phone: user.phone,
         avatar: user.avatar || "",
         recentMessage: recentMessages[user.id] || "",
         lastChatTime: "",
@@ -167,6 +170,7 @@ export default function Chat() {
             setSelectedUser(user);
           }}
           onSelectGroup={(group) => {
+            setContactInfoOpen(false);
             setSelectedUser(null);
             setSelectedGroup(group);
           }}
@@ -191,6 +195,8 @@ export default function Chat() {
             user={activeSelectedUser || selectedUser}
             onBack={() => setSelectedUser(null)}
             setRecentMessages={setRecentMessages}
+            contactInfoOpen={contactInfoOpen}
+            setContactInfoOpen={setContactInfoOpen}
           />
         ) : selectedGroup ? (
           <GroupChatWindow

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { ChatUser, ChatMessage } from "./types";
 import ChatHeader from "./ChatHeader";
+import ContactInfoPanel from "./ContactInfoPanel";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
 import { subscribePrivateSocket, sendSocketMessage } from "@/socket/socket";
@@ -18,9 +19,17 @@ type Props = {
   setRecentMessages: React.Dispatch<
     React.SetStateAction<Record<string, string>>
   >;
+  contactInfoOpen: boolean;
+  setContactInfoOpen: (open: boolean) => void;
 };
 
-export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
+export default function ChatWindow({
+  user,
+  onBack,
+  setRecentMessages,
+  contactInfoOpen,
+  setContactInfoOpen,
+}: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -351,48 +360,62 @@ export default function ChatWindow({ user, onBack, setRecentMessages }: Props) {
           isOnline={user.isOnline}
           typingText={typingUser ? `${typingUser} is typing...` : undefined}
           onBack={onBack}
+          onOpenContactInfo={() => setContactInfoOpen(true)}
         />
       </div>
 
-      {/* CHAT AREA */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-10 py-6 space-y-4">
-        {/* WELCOME */}
-        <div className="text-center mb-6">
-          <h2 className="text-lg font-semibold text-gray-500">
-            Chat with {user.name}
-          </h2>
-          <p className="text-sm text-gray-400">Secure real-time messaging ⚡</p>
-        </div>
+      <div className="relative flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* CHAT AREA */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 md:px-10 py-6 space-y-4">
+            {/* WELCOME */}
+            <div className="text-center mb-6">
+              <h2 className="text-lg font-semibold text-gray-500">
+                Chat with {user.name}
+              </h2>
+              <p className="text-sm text-gray-400">
+                Secure real-time messaging ⚡
+              </p>
+            </div>
 
-        {/* MESSAGES */}
-        <div className="space-y-3">
-          {messages.map((chat) => (
-            <div key={chat.id} className="animate-fadeIn">
-              <MessageBubble
-                message={chat}
-                currentUserId={me?.id || ""}
-                onEdit={handleEditMessage}
-                onDelete={handleDeleteMessage}
+            {/* MESSAGES */}
+            <div className="space-y-3">
+              {messages.map((chat) => (
+                <div key={chat.id} className="animate-fadeIn">
+                  <MessageBubble
+                    message={chat}
+                    currentUserId={me?.id || ""}
+                    onEdit={handleEditMessage}
+                    onDelete={handleDeleteMessage}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div ref={bottomRef} />
+          </div>
+
+          {/* INPUT */}
+          <div className="sticky bottom-0 px-4 md:px-8 py-4 bg-white/800 backdrop-blur-xl">
+            <div className="max-w-5xl mx-auto bg-white/800 rounded-2xl shadow-md px-3 py-2">
+              <MessageInput
+                message={message}
+                setMessage={setMessage}
+                onSend={sendMessage}
+                socket={socket}
+                meId={me?.id}
+                receiverId={user.id}
               />
             </div>
-          ))}
+          </div>
         </div>
-
-        <div ref={bottomRef} />
-      </div>
-
-      {/* INPUT */}
-      <div className="sticky bottom-0 px-4 md:px-8 py-4 bg-white/800 backdrop-blur-xl">
-        <div className="max-w-5xl mx-auto bg-white/800 rounded-2xl shadow-md px-3 py-2">
-          <MessageInput
-            message={message}
-            setMessage={setMessage}
-            onSend={sendMessage}
-            socket={socket}
-            meId={me?.id}
-            receiverId={user.id}
+        {contactInfoOpen && (
+          <ContactInfoPanel
+            user={user}
+            messages={messages}
+            onClose={() => setContactInfoOpen(false)}
           />
-        </div>
+        )}
       </div>
     </div>
   );
