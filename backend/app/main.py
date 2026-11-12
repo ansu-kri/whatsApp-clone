@@ -6,20 +6,56 @@ from app.routes.user import router as userRouter
 from app.websocket.socket import manager
 from app.routes.message import ( router as messageRouter )
 import json
+import asyncio
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.routes.upload import router as uploadRouter
 from app.routes.group import router as groupRouter
 from app.routes.notifications import router as notificationsRouter
+from app.routes.calls import router as callsRouter
 from app.middleware.authMiddleware import SECRET_KEY, ALGORITHM
 from app.utils.notifications import create_notification
 from jose import jwt
 
 app = FastAPI()
 
+active_calls = {}
+user_active_call = {}
+
+async def expire_connecting_call(call_id: str):
+    await asyncio.sleep(30)
+    call = active_calls.get(call_id)
+    if call and call.get("status") == "connecting":
+        now = datetime.now(timezone.utc)
+        call["status"] = "failed"
+        await db.calls.update_one({"_id": ObjectId(call_id)}, {"$set": {"status": "failed", "endTime": now, "duration": 0}})
+        payload = json.dumps({"type": "call_ended", "callId": call_id, "status": "failed"})
+        await manager.send_personal_message(call["callerId"], payload)
+        await manager.send_personal_message(call["receiverId"], payload)
+        active_calls.pop(call_id, None)
+        user_active_call.pop(call["callerId"], None)
+        user_active_call.pop(call["receiverId"], None)
+
+
+async def expire_call(call_id: str):
+    await asyncio.sleep(40)
+    call = active_calls.get(call_id)
+    if call and call.get("status") == "ringing":
+        call["status"] = "missed"
+        ended = datetime.now(timezone.utc)
+        await db.calls.update_one({"_id": ObjectId(call_id)}, {"$set": {"status": "missed", "endTime": ended, "duration": 0}})
+        await create_notification(call["receiverId"], call["callerId"], f"missed_call:{call_id}", f"Missed {call['callType']} call", "private", call["callerId"], "call")
+        await manager.send_personal_message(call["callerId"], json.dumps({"type": "call_ended", "callId": call_id, "status": "missed"}))
+        await manager.send_personal_message(call["receiverId"], json.dumps({"type": "call_ended", "callId": call_id, "status": "missed"}))
+        active_calls.pop(call_id, None)
+        user_active_call.pop(call["callerId"], None)
+        user_active_call.pop(call["receiverId"], None)
+
 @app.on_event("startup")
 async def ensure_notification_indexes():
     await db.notifications.create_index([("userId", 1), ("eventId", 1)], unique=True)
+    await db.calls.create_index([("callerId", 1), ("createdAt", -1)])
+    await db.calls.create_index([("receiverId", 1), ("createdAt", -1)])
 
 app.include_router(
     authRouter,
@@ -47,6 +83,7 @@ app.include_router(
 )
 
 app.include_router(notificationsRouter, prefix="/api/notifications")
+app.include_router(callsRouter, prefix="/api/calls")
 
 origins = [
     "http://localhost:5173"
@@ -142,6 +179,99 @@ async def websocket_endpoint(websocket: WebSocket):
                     }))
                 continue
 
+            # ================= AUTHENTICATED CALL SIGNALING =================
+            if event == "call_start":
+                receiver_id = parsed.get("receiverId")
+                call_type = parsed.get("callType")
+                try:
+                    ObjectId(receiver_id)
+                except Exception:
+                    continue
+                if call_type not in ("audio", "video") or receiver_id == user_id:
+                    continue
+                receiver = await db.users.find_one({"_id": ObjectId(receiver_id)}, {"_id": 1, "name": 1})
+                if not receiver:
+                    continue
+                if user_id in user_active_call or receiver_id in user_active_call:
+                    await manager.send_personal_message(user_id, json.dumps({"type": "call_failed", "reason": "busy"}))
+                    continue
+                call_id = str(ObjectId())
+                now = datetime.now(timezone.utc)
+                call = {"_id": ObjectId(call_id), "callerId": user_id, "receiverId": receiver_id, "callType": call_type, "status": "ringing", "createdAt": now, "startTime": None, "endTime": None, "duration": 0}
+                active_calls[call_id] = call
+                user_active_call[user_id] = call_id
+                user_active_call[receiver_id] = call_id
+                try:
+                    await db.calls.insert_one(call)
+                except Exception:
+                    active_calls.pop(call_id, None)
+                    user_active_call.pop(user_id, None)
+                    user_active_call.pop(receiver_id, None)
+                    await manager.send_personal_message(user_id, json.dumps({"type": "call_failed", "reason": "Call storage is unavailable."}))
+                    continue
+                if receiver_id not in manager.active_users:
+                    await db.calls.update_one({"_id": ObjectId(call_id)}, {"$set": {"status": "missed", "endTime": now}})
+                    await create_notification(receiver_id, user_id, f"missed_call:{call_id}", f"Missed {call_type} call", "private", user_id, "call")
+                    active_calls.pop(call_id, None)
+                    user_active_call.pop(user_id, None)
+                    user_active_call.pop(receiver_id, None)
+                    await manager.send_personal_message(user_id, json.dumps({"type": "call_failed", "callId": call_id, "reason": "offline"}))
+                    continue
+                await manager.send_personal_message(user_id, json.dumps({"type": "call_ringing", "call": {"callId": call_id, "callerId": user_id, "receiverId": receiver_id, "callType": call_type, "status": "ringing"}}))
+                await manager.send_personal_message(receiver_id, json.dumps({"type": "call_incoming", "call": {"callId": call_id, "callerId": user_id, "receiverId": receiver_id, "callType": call_type, "status": "ringing"}}))
+                asyncio.create_task(expire_call(call_id))
+                continue
+
+            if event in ("call_accept", "call_end", "call_offer", "call_answer", "call_ice"):
+                call_id = parsed.get("callId")
+                call = active_calls.get(call_id or "")
+                if not call or user_id not in (call["callerId"], call["receiverId"]):
+                    continue
+                other_id = call["receiverId"] if user_id == call["callerId"] else call["callerId"]
+                if event == "call_accept":
+                    if user_id != call["receiverId"] or call["status"] != "ringing":
+                        continue
+                    now = datetime.now(timezone.utc)
+                    call["status"] = "connecting"
+                    call["startTime"] = now
+                    await db.calls.update_one({"_id": ObjectId(call_id)}, {"$set": {"status": "connecting", "startTime": now}})
+                    await manager.send_personal_message(call["callerId"], json.dumps({"type": "call_accepted", "callId": call_id}))
+                    asyncio.create_task(expire_connecting_call(call_id))
+                    continue
+                if event == "call_end":
+                    status = parsed.get("status")
+                    if status not in ("rejected", "cancelled", "ended", "failed"):
+                        status = "ended"
+                    now = datetime.now(timezone.utc)
+                    start = call.get("startTime")
+                    duration = max(0, int((now - start).total_seconds())) if start else 0
+                    call["status"] = status
+                    await db.calls.update_one({"_id": ObjectId(call_id)}, {"$set": {"status": status, "endTime": now, "duration": duration}})
+                    payload = json.dumps({"type": "call_ended", "callId": call_id, "status": status})
+                    await manager.send_personal_message(other_id, payload)
+                    active_calls.pop(call_id, None)
+                    user_active_call.pop(call["callerId"], None)
+                    user_active_call.pop(call["receiverId"], None)
+                    continue
+                if call["status"] not in ("connecting", "connected"):
+                    continue
+                if event == "call_offer":
+                    offer = parsed.get("offer")
+                    if user_id != call["callerId"] or not isinstance(offer, dict) or offer.get("type") != "offer":
+                        continue
+                    await manager.send_personal_message(other_id, json.dumps({"type": "call_offer", "callId": call_id, "offer": offer}))
+                elif event == "call_answer":
+                    answer = parsed.get("answer")
+                    if user_id != call["receiverId"] or not isinstance(answer, dict) or answer.get("type") != "answer":
+                        continue
+                    call["status"] = "connected"
+                    await db.calls.update_one({"_id": ObjectId(call_id)}, {"$set": {"status": "connected"}})
+                    await manager.send_personal_message(other_id, json.dumps({"type": "call_answer", "callId": call_id, "answer": answer}))
+                elif event == "call_ice":
+                    candidate = parsed.get("candidate")
+                    if isinstance(candidate, dict):
+                        await manager.send_personal_message(other_id, json.dumps({"type": "call_ice", "callId": call_id, "candidate": candidate}))
+                continue
             # ================= PRIVATE TYPING =================
             if event == "typing":
                 receiver_id = parsed.get("receiverId")
@@ -375,6 +505,20 @@ async def websocket_endpoint(websocket: WebSocket):
                 await manager.send_personal_message(receiver_id, json.dumps(payload))
         became_offline = manager.disconnect_user(user_id, websocket)
         if became_offline:
+            call_id = user_active_call.get(user_id)
+            call = active_calls.get(call_id or "")
+            if call:
+                now = datetime.now(timezone.utc)
+                terminal = ("missed" if call["receiverId"] == user_id else "cancelled") if call.get("status") == "ringing" else "ended"
+                start = call.get("startTime")
+                duration = max(0, int((now - start).total_seconds())) if start else 0
+                call["status"] = terminal
+                await db.calls.update_one({"_id": ObjectId(call_id)}, {"$set": {"status": terminal, "endTime": now, "duration": duration}})
+                other = call["receiverId"] if call["callerId"] == user_id else call["callerId"]
+                await manager.send_personal_message(other, json.dumps({"type": "call_ended", "callId": call_id, "status": terminal}))
+                active_calls.pop(call_id, None)
+                user_active_call.pop(call["callerId"], None)
+                user_active_call.pop(call["receiverId"], None)
             last_seen = datetime.now(timezone.utc)
             await db.users.update_one(
                 {"_id": ObjectId(user_id)},

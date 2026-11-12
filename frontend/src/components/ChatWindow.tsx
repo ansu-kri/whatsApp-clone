@@ -21,6 +21,7 @@ type Props = {
   >;
   contactInfoOpen: boolean;
   setContactInfoOpen: (open: boolean) => void;
+  onStartCall?: (type: "audio" | "video") => void;
 };
 
 export default function ChatWindow({
@@ -29,6 +30,7 @@ export default function ChatWindow({
   setRecentMessages,
   contactInfoOpen,
   setContactInfoOpen,
+  onStartCall,
 }: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -361,6 +363,7 @@ export default function ChatWindow({
           typingText={typingUser ? `${typingUser} is typing...` : undefined}
           onBack={onBack}
           onOpenContactInfo={() => setContactInfoOpen(true)}
+          onStartCall={onStartCall}
         />
       </div>
 

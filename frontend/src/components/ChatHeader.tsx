@@ -18,6 +18,7 @@ import AccountModal from "./AccountModal";
 import GroupAvatar from "./GroupAvatar";
 import UserAvatar from "./UserAvatar";
 import { useGetMeQuery } from "@/app/userApi";
+import toast from "react-hot-toast";
 
 type GroupType = {
   id: string;
@@ -39,6 +40,7 @@ type Props = {
   onDeleteGroup?: () => Promise<void>;
   groupActionLoading?: boolean;
   onOpenContactInfo?: () => void;
+  onStartCall?: (type: "audio" | "video") => void;
 };
 
 export default function ChatHeader({
@@ -52,6 +54,7 @@ export default function ChatHeader({
   onDeleteGroup,
   groupActionLoading = false,
   onOpenContactInfo,
+  onStartCall,
 }: Props) {
   const [logout, { isLoading }] = useLogoutMutation();
 
@@ -250,6 +253,8 @@ export default function ChatHeader({
             type="button"
             aria-label="Video call"
             title="Video call"
+            onClick={() => { if (!isOnline) { toast("This person is currently offline.", { duration: 3000, style: { background: "#20163a", color: "#fff", borderRadius: "12px" } }); return; } onStartCall?.("video"); }}
+            disabled={type !== "user"}
             className="rounded-full p-2.5 text-gray-700 transition hover:bg-gray-100"
           >
             <Video size={20} strokeWidth={2} />
@@ -258,6 +263,8 @@ export default function ChatHeader({
             type="button"
             aria-label="Voice call"
             title="Voice call"
+            onClick={() => { if (!isOnline) { toast("This person is currently offline.", { duration: 3000, style: { background: "#20163a", color: "#fff", borderRadius: "12px" } }); return; } onStartCall?.("audio"); }}
+            disabled={type !== "user"}
             className="rounded-full p-2.5 text-gray-700 transition hover:bg-gray-100"
           >
             <Phone size={20} strokeWidth={2} />
