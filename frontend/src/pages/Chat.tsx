@@ -32,6 +32,7 @@ export default function Chat() {
     {},
   );
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [callHistoryOpen, setCallHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
   const userId = useSelector((state: any) => state.auth.user?.userId);
   const dispatch = useDispatch();
@@ -267,6 +268,7 @@ export default function Chat() {
             }
           }}
           onCreateGroup={() => setIsCreateGroupOpen(true)}
+          onCallHistory={() => setCallHistoryOpen(true)}
         />
       </div>
 
@@ -328,6 +330,8 @@ export default function Chat() {
         <CallHistory
           userId={userId}
           users={users}
+          open={callHistoryOpen}
+          onClose={() => setCallHistoryOpen(false)}
           onCall={(user, type) => setOutgoingCall({ user, type })}
         />
       )}

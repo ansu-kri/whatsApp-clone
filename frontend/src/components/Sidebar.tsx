@@ -3,6 +3,7 @@ import type { ChatUser } from "./types";
 import {
   CheckSquare,
   CircleDot,
+  History,
   Image,
   LogOut,
   LockKeyhole,
@@ -48,6 +49,7 @@ type Props = {
   activeTab: "chats" | "groups";
   onTabChange: (tab: "chats" | "groups") => void;
   onCreateGroup: () => void;
+  onCallHistory: () => void;
 };
 
 type NavItemProps = {
@@ -93,6 +95,7 @@ export default function Sidebar({
   activeTab,
   onTabChange,
   onCreateGroup,
+  onCallHistory,
 }: Props) {
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -284,6 +287,17 @@ export default function Sidebar({
                     >
                       <MessageCircle size={17} />
                       Mark all as read
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onCallHistory();
+                      }}
+                      className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm hover:bg-[#f5f6f6]"
+                    >
+                      <History size={17} />
+                      Call History
                     </button>
                     <div className="my-1.5 border-t border-[#e9edef]" />
                     <button

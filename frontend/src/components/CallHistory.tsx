@@ -1,5 +1,5 @@
-﻿import { useState } from "react";
-import { History, Phone, Video, X } from "lucide-react";
+﻿import { useCallback, useEffect, useState } from "react";
+import { Phone, Video, X } from "lucide-react";
 import { API_BASE_URL } from "@/app/api";
 import type { ChatUser } from "./types";
 
@@ -16,13 +16,13 @@ type Props = {
   users: ChatUser[];
   userId: string;
   onCall: (user: ChatUser, type: "audio" | "video") => void;
+  open: boolean;
+  onClose: () => void;
 };
-export default function CallHistory({ users, userId, onCall }: Props) {
-  const [open, setOpen] = useState(false);
+export default function CallHistory({ users, userId, onCall, open, onClose }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
-  const load = async () => {
-    setOpen(true);
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -33,22 +33,16 @@ export default function CallHistory({ users, userId, onCall }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+  useEffect(() => {
+    if (open) void load();
+  }, [open, load]);
   return (
     <>
-      <button
-        type="button"
-        onClick={() => void load()}
-        aria-label="Call history"
-        title="Call history"
-        className="fixed bottom-5 left-5 z-40 rounded-full bg-[#6b3fc8] p-3 text-white shadow-lg hover:bg-[#5732a6]"
-      >
-        <History size={20} />
-      </button>
       {open && (
         <div
           className="fixed inset-0 z-[90] flex justify-center bg-black/45 p-4 sm:items-center"
-          onClick={() => setOpen(false)}
+          onClick={onClose}
         >
           <section
             role="dialog"
@@ -60,7 +54,7 @@ export default function CallHistory({ users, userId, onCall }: Props) {
             <header className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="font-semibold">Call history</h2>
               <button
-                onClick={() => setOpen(false)}
+                onClick={onClose}
                 aria-label="Close call history"
               >
                 <X size={20} />
@@ -125,7 +119,7 @@ export default function CallHistory({ users, userId, onCall }: Props) {
                           className="rounded-full p-2 text-purple-700 hover:bg-purple-50"
                           title={`Call ${other.name}`}
                           onClick={() => {
-                            setOpen(false);
+                            onClose();
                             onCall(other, item.callType);
                           }}
                         >
