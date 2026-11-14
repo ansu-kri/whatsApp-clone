@@ -111,22 +111,33 @@ export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#181424] rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/55 p-3 backdrop-blur-sm sm:p-5">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-group-title"
+        className="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--modal-border)] bg-[var(--modal-surface)] text-[var(--modal-text)] shadow-2xl sm:max-h-[calc(100dvh-2.5rem)]"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--modal-border)] px-5 py-4 sm:px-6">
           <div className="flex items-center gap-2">
-            <Users className="text-purple-400" size={20} />
-            <h2 className="text-lg font-semibold text-white">Create Group</h2>
+            <Users className="text-purple-500 dark:text-purple-400" size={20} />
+            <h2 id="create-group-title" className="text-lg font-semibold">
+              Create Group
+            </h2>
           </div>
 
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button
+            onClick={onClose}
+            aria-label="Close create group"
+            className="rounded-lg p-1 text-[var(--modal-muted)] transition hover:bg-black/5 hover:text-[var(--modal-text)] dark:hover:bg-white/10"
+          >
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
           <div>
-            <label className="text-sm text-gray-400 block mb-2">
+            <label className="mb-2 block text-sm text-[var(--modal-muted)]">
               Group Name
             </label>
 
@@ -135,12 +146,12 @@ export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="Enter group name"
-              className="w-full bg-[#241d34] border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500"
+              className="w-full rounded-xl border border-[var(--modal-border)] bg-[var(--modal-input)] px-4 py-3 text-[var(--modal-text)] outline-none placeholder:text-[var(--modal-placeholder)] focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
             />
           </div>
 
           <div>
-            <label className="text-sm text-gray-400 block mb-2">
+            <label className="mb-2 block text-sm text-[var(--modal-muted)]">
               Group Image
             </label>
 
@@ -166,7 +177,7 @@ export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
                 }
                 setGroupImage(file);
               }}
-              className="w-full text-sm text-gray-400"
+              className="block w-full cursor-pointer rounded-xl border border-[var(--modal-border)] bg-[var(--modal-input)] px-3 py-2 text-sm text-[var(--modal-muted)] file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-purple-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-purple-700"
             />
             {imagePreview ? (
               <img
@@ -175,18 +186,18 @@ export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
                 className="mt-3 h-20 w-20 rounded-full border border-white/10 object-cover"
               />
             ) : (
-              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-full bg-[#241d34] text-purple-300">
+              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-[var(--modal-border)] bg-[var(--modal-input)] text-purple-500 dark:text-purple-300">
                 <ImagePlus size={24} />
               </div>
             )}
           </div>
 
           <div>
-            <label className="text-sm text-gray-400 block mb-3">
+            <label className="mb-3 block text-sm text-[var(--modal-muted)]">
               Select Members
             </label>
 
-            <div className="max-h-56 overflow-y-auto space-y-2">
+            <div className="max-h-56 space-y-2 overflow-y-auto overscroll-contain pr-1">
               {users
                 .filter((user) => user.id !== currentUserId)
                 .map((user) => (
@@ -197,8 +208,8 @@ export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition
                     ${
                       selectedMembers.includes(user.id)
-                        ? "bg-purple-600/20 border border-purple-500"
-                        : "bg-[#241d34] border border-transparent hover:border-white/10"
+                        ? "border-purple-500 bg-purple-500/10"
+                        : "border-[var(--modal-border)] bg-[var(--modal-input)] hover:border-purple-400/60"
                     }`}
                   >
                     <UserAvatar
@@ -208,7 +219,9 @@ export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
                       className="w-10 h-10 rounded-full object-cover"
                     />
 
-                    <span className="text-white">{user.name}</span>
+                    <span className="min-w-0 truncate text-[var(--modal-text)]">
+                      {user.name}
+                    </span>
                   </button>
                 ))}
             </div>
@@ -222,7 +235,7 @@ export default function CreateGroupModal({ isOpen, onClose, users }: Props) {
               !groupName.trim() ||
               selectedMembers.length === 0
             }
-            className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition"
+            className="w-full shrink-0 rounded-xl bg-purple-600 py-3 font-semibold text-white transition hover:bg-purple-700 active:bg-purple-800 disabled:cursor-not-allowed disabled:bg-purple-400 disabled:text-white/90 dark:disabled:bg-purple-800 dark:disabled:text-white/70"
           >
             {isUploading
               ? "Uploading image..."

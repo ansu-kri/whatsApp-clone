@@ -201,16 +201,16 @@ export default function AccountModal({ open, onClose, user }: Props) {
               {success}
             </p>
           )}
-          <div className="rounded-2xl bg-[#1F2937]/60 border border-white/10 p-5 space-y-4">
+          <div className="rounded-2xl border border-[var(--modal-border)] bg-[var(--modal-input)] p-5 space-y-4">
             <h2 className="text-lg font-semibold text-white">
               Account Information
             </h2>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-gray-400">
+              <div className="flex items-center gap-3 text-[var(--modal-muted)]">
                 <CalendarDays size={17} />
                 Member Since
               </div>
-              <span className="text-gray-200">
+              <span className="text-[var(--modal-text)]">
                 {user.createdAt
                   ? new Date(user.createdAt).toLocaleDateString(undefined, {
                       day: "2-digit",
@@ -221,7 +221,7 @@ export default function AccountModal({ open, onClose, user }: Props) {
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-gray-400">
+              <div className="flex items-center gap-3 text-[var(--modal-muted)]">
                 <ShieldCheck size={17} />
                 Status
               </div>
@@ -238,7 +238,7 @@ export default function AccountModal({ open, onClose, user }: Props) {
                   setFile(null);
                   setError("");
                 }}
-                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-200"
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-[var(--modal-text)]"
               >
                 Cancel
               </button>

@@ -180,3 +180,6 @@ body {
 :root[data-theme="dark"] .chat-menu .border-gray-200 {
   border-color: rgb(255 255 255 / 0.12) !important;
 }
+
+:root[data-theme="light"] { --modal-surface: #fff; --modal-input: #f8fafc; --modal-text: #1f2937; --modal-muted: #64748b; --modal-placeholder: #94a3b8; --modal-border: #e2e8f0; }
+:root[data-theme="dark"] { --modal-surface: #181424; --modal-input: #241d34; --modal-text: #f8fafc; --modal-muted: #c4bdd2; --modal-placeholder: #a8a1b5; --modal-border: rgb(255 255 255 / 0.1); }
