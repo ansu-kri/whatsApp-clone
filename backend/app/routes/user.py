@@ -70,8 +70,53 @@ async def get_users(payload: dict = Depends(verify_token)):
         {"$group": {"_id": "$senderId", "count": {"$sum": 1}}},
     ]):
         unread_counts[item["_id"]] = item["count"]
+    latest_messages = {}
+    async for item in db.messages.aggregate([
+        {"$match": {"$or": [
+            {"senderId": str(current_user_id)},
+            {"receiverId": str(current_user_id)},
+        ]}},
+        {"$addFields": {"conversationUserId": {
+            "$cond": [
+                {"$eq": ["$senderId", str(current_user_id)]},
+                "$receiverId",
+                "$senderId",
+            ]
+        }}},
+        {"$sort": {"createdAt": -1, "_id": -1}},
+        {"$group": {
+            "_id": "$conversationUserId",
+            "latestMessageId": {"$first": {"$toString": "$_id"}},
+            "latestMessage": {"$first": "$message"},
+            "latestMessageDeleted": {"$first": "$deleted"},
+            "lastChatAt": {"$first": "$createdAt"},
+        }},
+    ]):
+        last_chat_at = item.get("lastChatAt")
+        if last_chat_at and last_chat_at.tzinfo is None:
+            last_chat_at = last_chat_at.replace(tzinfo=timezone.utc)
+        latest_messages[item["_id"]] = {
+            "recentMessage": (
+                "This message was deleted"
+                if item.get("latestMessageDeleted")
+                else item.get("latestMessage", "")
+            ),
+            "latestMessageId": item.get("latestMessageId"),
+            "lastChatAt": (
+                last_chat_at.isoformat().replace("+00:00", "Z")
+                if last_chat_at
+                else None
+            ),
+        }
+
     async for user in db.users.find({"_id": {"$ne": current_user_id}}):
         serialized = _serialize_user(user)
         serialized["unreadCount"] = unread_counts.get(serialized["id"], 0)
+        serialized.update(latest_messages.get(serialized["id"], {
+            "recentMessage": "",
+            "latestMessageId": None,
+            "lastChatAt": None,
+        }))
         users.append(serialized)
+    users.sort(key=lambda user: user.get("lastChatAt") or "", reverse=True)
     return users

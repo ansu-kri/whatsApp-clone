@@ -29,6 +29,8 @@ export type ChatUser = {
   unreadCount?: number;
   createdAt?: string;
   lastSeen?: string;
+  lastChatAt?: string | null;
+  latestMessageId?: string | null;
 };
 
 export interface GroupMember {

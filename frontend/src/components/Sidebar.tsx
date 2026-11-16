@@ -423,7 +423,9 @@ export default function Sidebar({
                       >
                         {user.typing
                           ? "typing..."
-                          : user.recentMessage || "No messages yet"}
+                          : user.lastChatAt
+                            ? user.recentMessage || "This message was deleted"
+                            : "No messages yet"}
                       </span>
                       {!!user.unreadCount && (
                         <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-semibold text-white">

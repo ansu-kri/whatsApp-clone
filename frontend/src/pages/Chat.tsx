@@ -2,23 +2,22 @@ import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
 import type { ChatUser } from "../components/types";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useGetUsersQuery } from "../app/userApi";
+import { userApis, useGetUsersQuery } from "../app/userApi";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import { useGetGroupsQuery } from "@/app/groupApi";
 import { useDispatch, useSelector } from "react-redux";
 import apiSlice from "@/app/api";
+import type { AppDispatch, RootState } from "@/app/store";
 import type { Group } from "../components/Sidebar";
 import GroupChatWindow from "@/components/GroupChatWindow";
 import { subscribePrivateSocket } from "@/socket/socket";
 import toast from "react-hot-toast";
 import { API_BASE_URL } from "@/app/api";
-import { useGetNotificationsQuery } from "@/app/notificationApi";
 import CallManager from "@/components/CallManager";
 import CallHistory from "@/components/CallHistory";
 
 export default function Chat() {
   const { data: apiUsers = [], isLoading } = useGetUsersQuery();
-  const { data: notifications = [] } = useGetNotificationsQuery();
 
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [liveLastSeen, setLiveLastSeen] = useState<Record<string, string>>({});
@@ -28,16 +27,16 @@ export default function Chat() {
     type: "audio" | "video";
   } | null>(null);
   const [contactInfoOpen, setContactInfoOpen] = useState(false);
-  const [recentMessages, setRecentMessages] = useState<Record<string, string>>(
+  const [, setRecentMessages] = useState<Record<string, string>>(
     {},
   );
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"chats" | "groups">("chats");
-  const userId = useSelector((state: any) => state.auth.user?.userId);
-  const dispatch = useDispatch();
+  const userId = useSelector((state: RootState) => state.auth.user?.userId);
+  const dispatch = useDispatch<AppDispatch>();
   // console.log("userId", userId);
-  const { data: groups = [], refetch } = useGetGroupsQuery(userId, {
+  const { data: groups = [], refetch } = useGetGroupsQuery(userId || "", {
     skip: !userId,
     refetchOnMountOrArgChange: true,
   });
@@ -65,15 +64,58 @@ export default function Chat() {
 
     const onMessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
+      if (data.type === "message" && data.data) {
+        const message = data.data;
+        const conversationId =
+          message.senderId === userId ? message.receiverId : message.senderId;
+        dispatch(
+          userApis.util.updateQueryData("getUsers", undefined, (cachedUsers) => {
+            const user = cachedUsers.find(
+              (candidate) => candidate.id === conversationId,
+            );
+            if (!user || !message.id || user.latestMessageId === message.id)
+              return;
+
+            const incomingTime = Date.parse(message.createdAt || "") || 0;
+            const currentTime = Date.parse(user.lastChatAt || "") || 0;
+            if (
+              incomingTime < currentTime ||
+              (incomingTime === currentTime &&
+                String(message.id) <= String(user.latestMessageId || ""))
+            )
+              return;
+
+            user.latestMessageId = message.id;
+            user.recentMessage = message.deleted
+              ? "This message was deleted"
+              : message.message;
+            user.lastChatAt = message.createdAt;
+            cachedUsers.sort(
+              (a, b) =>
+                (Date.parse(b.lastChatAt || "") || 0) -
+                (Date.parse(a.lastChatAt || "") || 0),
+            );
+          }),
+        );
+      }
+      if (data.type === "message_edited" || data.type === "message_deleted") {
+        dispatch(
+          userApis.util.updateQueryData("getUsers", undefined, (cachedUsers) => {
+            const user = cachedUsers.find(
+              (candidate) => candidate.latestMessageId === data.messageId,
+            );
+            if (user) {
+              user.recentMessage =
+                data.type === "message_deleted"
+                  ? "This message was deleted"
+                  : data.message;
+            }
+          }),
+        );
+      }
       if (data.type === "notification" && data.notification?.id) {
         const notification = data.notification;
         dispatch(apiSlice.util.invalidateTags(["Notifications"]));
-        if (notification.message)
-          setRecentMessages((current) => ({
-            ...current,
-            [notification.conversationId]: notification.message,
-          }));
-
         const active = activeConversationRef.current;
         const viewingConversation =
           notification.conversationType === "group"
@@ -191,20 +233,6 @@ export default function Chat() {
     };
   }, [userId, dispatch]);
 
-  const notificationPreviews = useMemo(() => {
-    const previews: Record<string, string> = {};
-    for (const notification of notifications) {
-      if (
-        notification.type === "message" &&
-        notification.message &&
-        !previews[notification.conversationId]
-      ) {
-        previews[notification.conversationId] = notification.message;
-      }
-    }
-    return previews;
-  }, [notifications]);
-
   const users: ChatUser[] = useMemo(
     () =>
       apiUsers.map((user) => ({
@@ -213,9 +241,15 @@ export default function Chat() {
         email: user.email,
         phone: user.phone,
         avatar: user.avatar || "",
-        recentMessage:
-          recentMessages[user.id] || notificationPreviews[user.id] || "",
-        lastChatTime: "",
+        recentMessage: user.recentMessage || "",
+        lastChatAt: user.lastChatAt,
+        latestMessageId: user.latestMessageId,
+        lastChatTime: user.lastChatAt
+          ? new Date(user.lastChatAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
         chats: [],
         isOnline: onlineUsers.includes(user.id),
         typing: false,
@@ -223,7 +257,7 @@ export default function Chat() {
         lastSeen: liveLastSeen[user.id] || user.lastSeen || "",
       })),
 
-    [apiUsers, onlineUsers, recentMessages, notificationPreviews, liveLastSeen],
+    [apiUsers, onlineUsers, liveLastSeen],
   );
 
   const activeSelectedUser = selectedUser
@@ -245,7 +279,11 @@ export default function Chat() {
     <div className="h-screen flex bg-[#f5f7fb] overflow-hidden">
       <div className={`${selectedUser ? "hidden sm:block" : "block"} sm:block`}>
         <Sidebar
-          users={users}
+          users={[...users].sort(
+            (a, b) =>
+              (Date.parse(b.lastChatAt || "") || 0) -
+              (Date.parse(a.lastChatAt || "") || 0),
+          )}
           groups={groups}
           selectedUser={selectedUser}
           selectedGroup={selectedGroup}
@@ -279,7 +317,6 @@ export default function Chat() {
             key={selectedUser.id}
             user={activeSelectedUser || selectedUser}
             onBack={() => setSelectedUser(null)}
-            setRecentMessages={setRecentMessages}
             onStartCall={(type) =>
               setOutgoingCall({
                 user: activeSelectedUser || selectedUser,

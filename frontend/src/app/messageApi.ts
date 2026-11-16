@@ -1,4 +1,5 @@
 import apiSlice from "./api";
+import { userApis } from "./userApi";
 
 
 export interface Message {
@@ -7,6 +8,13 @@ export interface Message {
     receiverId: string;
     message: string;
     createdAt: string;
+    edited?: boolean;
+    deleted?: boolean;
+}
+
+export interface MessageMutationResponse {
+    id: string;
+    message?: string;
     edited?: boolean;
     deleted?: boolean;
 }
@@ -36,7 +44,7 @@ export const messageApis = apiSlice.injectEndpoints({
 
         //Edit Message
         editMessage: builder.mutation<
-            any,
+            MessageMutationResponse,
             { id: string; message: string }
         >({
             query: ({ id, message }) => ({
@@ -44,17 +52,39 @@ export const messageApis = apiSlice.injectEndpoints({
                 method: "PUT",
                 body: { message },
             }),
+            async onQueryStarted({ id, message }, { dispatch, queryFulfilled }) {
+                try {
+                    await queryFulfilled;
+                    dispatch(userApis.util.updateQueryData("getUsers", undefined, (users) => {
+                        const user = users.find((candidate) => candidate.latestMessageId === id);
+                        if (user) user.recentMessage = message;
+                    }));
+                } catch {
+                    // A failed edit must not change the cached sidebar preview.
+                }
+            },
         }),
 
         //Delete Message
         deleteMessage: builder.mutation<
-            any,
+            MessageMutationResponse,
             string
         >({
             query: (id) => ({
                 url: `/api/messages/delete/${id}`,
                 method: "DELETE",
             }),
+            async onQueryStarted(id, { dispatch, queryFulfilled }) {
+                try {
+                    await queryFulfilled;
+                    dispatch(userApis.util.updateQueryData("getUsers", undefined, (users) => {
+                        const user = users.find((candidate) => candidate.latestMessageId === id);
+                        if (user) user.recentMessage = "This message was deleted";
+                    }));
+                } catch {
+                    // A failed delete must not change the cached sidebar preview.
+                }
+            },
         }),
     }),
 });

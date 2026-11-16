@@ -10,6 +10,9 @@ export interface User {
   lastSeen?: string;
   isOnline?: boolean;
   unreadCount?: number;
+  recentMessage?: string;
+  latestMessageId?: string | null;
+  lastChatAt?: string | null;
 }
 
 export const userApis = apiSlice.injectEndpoints({

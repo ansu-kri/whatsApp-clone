@@ -16,9 +16,6 @@ import { skipToken } from "@reduxjs/toolkit/query";
 type Props = {
   user: ChatUser;
   onBack?: () => void;
-  setRecentMessages: React.Dispatch<
-    React.SetStateAction<Record<string, string>>
-  >;
   contactInfoOpen: boolean;
   setContactInfoOpen: (open: boolean) => void;
   onStartCall?: (type: "audio" | "video") => void;
@@ -27,7 +24,6 @@ type Props = {
 export default function ChatWindow({
   user,
   onBack,
-  setRecentMessages,
   contactInfoOpen,
   setContactInfoOpen,
   onStartCall,
@@ -94,19 +90,7 @@ export default function ChatWindow({
 
     setMessages(normalized);
 
-    // ================= UPDATE SIDEBAR =================
-    if (normalized.length > 0) {
-      const lastMsg = normalized[normalized.length - 1];
-
-      setRecentMessages((prev) => ({
-        ...prev,
-
-        [user.id]: lastMsg.deleted
-          ? "This message was deleted"
-          : lastMsg.message,
-      }));
-    }
-  }, [oldMessages, user.id, setRecentMessages]);
+  }, [oldMessages, user.id]);
 
   // ================= MARK AS SEEN =================
   useEffect(() => {
@@ -147,16 +131,6 @@ export default function ChatWindow({
 
           return [...prev, newMessage];
         });
-
-        setRecentMessages((prev) => ({
-          ...prev,
-
-          [newMessage.senderId === meRef.current?.id
-            ? newMessage.receiverId
-            : newMessage.senderId]: newMessage.deleted
-            ? "This message was deleted"
-            : newMessage.message,
-        }));
 
         //===Instant seen ====
         if (
