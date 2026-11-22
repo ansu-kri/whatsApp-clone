@@ -86,7 +86,9 @@ app.include_router(notificationsRouter, prefix="/api/notifications")
 app.include_router(callsRouter, prefix="/api/calls")
 
 origins = [
-    "http://localhost:5173"
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://whats-app-clone-frontend-murex.vercel.app/",
 ]
 
 app.add_middleware(
